@@ -1,0 +1,16 @@
+# Node modules
+node_modules/
+
+# dotenv environment variables file
+.env
+
+# Logs
+logs/
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE directories
+.vscode/
