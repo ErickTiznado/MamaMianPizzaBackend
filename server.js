@@ -14,7 +14,7 @@ res.send('Hello Wordl!')
 });
 
 app.get('/milu', (req, res) => {
-    res.send('Te amo miuuuuuuuuu <3');
+    res.send({message :'Te amo miuuuuuuuuu <3'});
 })
 
 app.listen(PORT, () => {
