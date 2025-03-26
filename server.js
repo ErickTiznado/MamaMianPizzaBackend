@@ -13,6 +13,10 @@ app.get('/', (req, res) => {
 res.send('Hello Wordl!')
 });
 
+app.get('/milu', (req, res) => {
+    res.send('Te amo miuuuuuuuuu <3');
+})
+
 app.listen(PORT, () => {
     console.log('Servidor corriendo en el puerto', PORT);
 });
