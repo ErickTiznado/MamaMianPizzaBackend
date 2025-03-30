@@ -20,11 +20,10 @@ app.listen(PORT, () => {
 });
 
 
-//Rutas
+//Rutas de usuarios
 
 const userRoutes = require('./routes/userRoutes');
 app.use('/api/users', userRoutes);
-
 //Rutas de Testeo
 
 const testRoutes = require('./routes/testRoutes');
