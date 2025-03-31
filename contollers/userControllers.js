@@ -57,7 +57,7 @@ exports.loginAdmin = (req, res) =>{
             }
 
             if(isMatch){
-                res.status(200).json({message: 'Inicio de sesion exitoso'});
+                res.status(200).json({ success:true ,message: 'Inicio de sesion exitoso'});
 
             }else {
                 return res.status(401).json({message: 'Credenciales invalidas'});
