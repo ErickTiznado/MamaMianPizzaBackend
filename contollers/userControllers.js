@@ -32,3 +32,37 @@ exports.createAdmin = (req, res) => {
     res.status(500).json({message: 'Error en el servidor'});
 }
 };
+
+
+exports.loginAdmin = (req, res) =>{
+    const {correo, contrasena} = req.body;
+    if(!correo || !contrasena){
+        return res.status(400).json({message: 'Faltan datos requeridos'});
+    }
+
+    pool.query('SELECT * FROM administradores WHERE correo = ?', [correo], (err, results) =>{
+        if(err){
+            console.error('Error al iniciar sesion', err);
+            return res.status(500).json({error: 'Error al iniciar sesion'})
+        }
+        if(results.length === 0){
+            return res.status(401).json({message: 'Credenciales invalidas'});
+        }
+
+        const admin = results[0];
+        bcrypt.compare(contrasena, admin.contrasena, (err, isMatch) =>{
+            if(err){
+                console.error('Error al comparar contraseñas', err);
+                return res.status(500).json({message: 'Error en el servidor'});
+            }
+
+            if(isMatch){
+                res.status(200).json({message: 'Inicio de sesion exitoso'});
+
+            }else {
+                return res.status(401).json({message: 'Credenciales invalidas'});
+            }
+        }
+    );
+    })
+};
