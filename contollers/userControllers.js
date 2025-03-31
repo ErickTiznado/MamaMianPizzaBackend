@@ -50,6 +50,7 @@ exports.loginAdmin = (req, res) =>{
         }
 
         const admin = results[0];
+        console.log('Admin:', admin);
         bcrypt.compare(contrasena, admin.contrasena, (err, isMatch) =>{
             if(err){
                 console.error('Error al comparar contraseñas', err);
