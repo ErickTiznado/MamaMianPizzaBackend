@@ -8,7 +8,7 @@ Backend para el sistema de gestión y pedidos de MamaMian Pizza. Este proyecto p
 
 - Node.js
 - Express.js
-- MongoDB (o la base de datos utilizada)
+- Mysql
 - JWT para autenticación
 - Otras dependencias relevantes
 
