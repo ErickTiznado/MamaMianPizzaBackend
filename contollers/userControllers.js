@@ -98,3 +98,24 @@ exports.loginClient = (req, res) => {
         })
     })
 }
+
+exports.createClient = (req, res) => {
+    try{
+    const { nombre, correo, contrasena, celular, fecha_nacimiento, sexo, dui } = req.body;
+    if(!nombre || !correo || !contrasena || !celular || !fecha_nacimiento || !sexo || !dui){
+        return res.status(400).json({message: 'Faltan datos requeridos'})
+    }
+
+    const haShedPass = bcrypt.hashSync(contrasena, 10);
+    pool.query('INSERT INTO usuarios (nombre, correo, contrasena, celular, fecha_nacimiento, sexo, dui) VALUES (?, ?, ?, ?, ?, ?, ?)', [nombre, correo, haShedPass, celular, fecha_nacimiento, sexo, dui] , (err, results ) => {
+        if(err){
+            console.error('Error al crear usuario', err);
+            return res.status(500).json({error: 'Error al crear usuario'})
+        }
+        res.status(201).json({message: 'Usuario creado exitosamente', id_usuario: results.insertId})
+    } )
+}catch(error){
+    console.error('Error en el servidor', error);
+    res.status(500).json({message: 'Error en el servidor'});
+}
+}
