@@ -73,20 +73,8 @@ Para ejecutar las pruebas:
 npm test
 ```
 
-## 🤝 Contribuciones
-
-1. Haz un fork del proyecto
-2. Crea tu rama de funcionalidad (`git checkout -b feature/nueva-funcionalidad`)
-3. Realiza tus cambios y haz commits (`git commit -am 'Agrega nueva funcionalidad'`)
-4. Sube los cambios (`git push origin feature/nueva-funcionalidad`)
-5. Abre un Pull Request
 
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia [MIT](LICENSE).
 
-## 📞 Contacto
-
-Nombre - [correo electrónico](mailto:tu-email@ejemplo.com)
-
-Link del proyecto: [https://github.com/yourusername/MamaMianPizzaBackend](https://github.com/yourusername/MamaMianPizzaBackend)
