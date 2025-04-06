@@ -41,14 +41,6 @@ Para desarrollo:
 npm run dev
 ```
 
-## 🔑 Características Principales
-
-- Autenticación y autorización para clientes y administradores
-- Gestión de usuarios
-- Procesamiento de pedidos
-- Gestión de inventario
-- Generación de informes
-
 ## 📡 API Endpoints
 
 ### Usuarios
@@ -61,9 +53,7 @@ npm run dev
 | POST | `/api/users/users_login` | Login de cliente | Público |
 | POST | `/api/users/users_register` | Registro de cliente | Público |
 
-### Otros Endpoints
 
-Documentar aquí los endpoints adicionales...
 
 ## 🧪 Pruebas
 
