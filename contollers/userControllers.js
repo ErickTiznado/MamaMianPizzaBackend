@@ -84,7 +84,7 @@ exports.loginClient = (req, res) => {
         }
 
         const user = results[0];
-        bcrypt.compare(contrasena, admin.contrasena, (err, isMatch) => {
+        bcrypt.compare(contrasena, user.contrasena, (err, isMatch) => {
             if(err){
                 console.log('Error al comparar contraseñas', err);
                 return res.status(500).json({message: 'Error en el servidor'});
