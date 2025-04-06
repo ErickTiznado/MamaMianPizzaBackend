@@ -5,7 +5,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const corsOptions = {
-    origin: 'http://localhost:5173', // Cambia esto por la URL de tu frontend
+    origin: ['http://localhost:5173', 'http://localhost:3000'], // Cambia esto por la URL de tu frontend
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
