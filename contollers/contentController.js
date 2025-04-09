@@ -108,7 +108,7 @@ exports.submitContent = (req, res) => {
 };
 
 exports.getLasMasPopulares = (req, res) => {
-    pool.query('SELECT * FROM productos WHERE activo = 1 AND seccion = "Las más populares" ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {
+    pool.query('SELECT * FROM productos WHERE seccion = "Las más populares" ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {
         if(err){
             console.error('Error al obtener productos', err);
             return res.status(500).json({ message: 'Error al obtener productos' });
