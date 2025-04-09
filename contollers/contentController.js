@@ -35,7 +35,7 @@ const upload = multer({
 
 // Function to get category ID from name
 const getCategoryId = (categoryName, callback) => {
-    pool.query('SELECT id_categorias FROM categorias WHERE nombre = ?', [categoryName], (err, results) => {
+    pool.query('SELECT id_categoria FROM categorias WHERE nombre = ?', [categoryName], (err, results) => {
         if (err) {
             callback(err, null);
             return;
