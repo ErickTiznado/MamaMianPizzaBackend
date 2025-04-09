@@ -86,7 +86,7 @@ exports.submitContent = (req, res) => {
                 }
                 
                 pool.query(
-                    'INSERT INTO productos (titulo, descripcion, precio, porciones, seccion, idcategoria, activo, imagen, fecha_creacion, fecha_actualizacion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    'INSERT INTO productos (titulo, descripcion, precio, porciones, seccion, id_categoria, activo, imagen, fecha_creacion, fecha_actualizacion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     [titulo, descripcion, precio, porciones, sesion, idcategoria, activo, imagenPath, actualDate, actDate],
                     (err, results) => {
                         if (err) {
