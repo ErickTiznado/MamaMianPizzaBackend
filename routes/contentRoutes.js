@@ -29,4 +29,7 @@ router.delete('/:id', (req, res) => {
     res.status(200).json({ message: `Delete product with ID: ${req.params.id}` });
 });
 
+
+router.get('/MostPopular', contentController.getLasMasPopulares);
+
 module.exports = router;
