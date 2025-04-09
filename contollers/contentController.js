@@ -107,7 +107,7 @@ exports.submitContent = (req, res) => {
     });
 };
 
-exports.getLasMasPopulares = (res) => {
+exports.getLasMasPopulares = (req, res) => {
     pool.query('SELECT * FROM productos WHERE seccion = "Las más populares" ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {
         if(err){
             console.error('Error al obtener productos', err);

@@ -15,14 +15,19 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 const corsOptions = {
-    origin: ['http://localhost:5173', 'http://localhost:3000','http://q8w8g48gwkco444g8sow000g.82.29.198.111.sslip.io'], // Cambia esto por la URL de tu frontend
+    origin: [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://q8w8g48gwkco444g8sow000g.82.29.198.111.sslip.io',
+        'http://bkcww48c8swokk0s4wo4gkk8.82.29.198.111.sslip.io'  // Agregado
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
 };
-
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
