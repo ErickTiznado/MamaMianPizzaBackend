@@ -114,5 +114,6 @@ exports.getLasMasPopulares = (req, res) => {
             return res.status(500).json({ message: 'Error al obtener productos' });
         }
         res.status(200).json({ message: 'Productos obtenidos exitosamente', productos: results });
+        console.log('Productos obtenidos exitosamente', results);
     })
 }
