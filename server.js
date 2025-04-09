@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 const corsOptions = {
-    origin: ['http://localhost:5173', 'http://localhost:3000'], // Cambia esto por la URL de tu frontend
+    origin: ['http://localhost:5173', 'http://localhost:3000','http://q8w8g48gwkco444g8sow000g.82.29.198.111.sslip.io'], // Cambia esto por la URL de tu frontend
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
