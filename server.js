@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const pool = require('./config/db');
 
 // Import routes
@@ -32,7 +33,18 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from the uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const uploadsPath = path.join(__dirname, 'uploads');
+// Ensure the uploads directory exists
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath, { recursive: true });
+  console.log('Created uploads directory');
+}
+// Serve static files with optimized options
+app.use('/uploads', express.static(uploadsPath, {
+  maxAge: '1d',  // Cache for 1 day
+  etag: true,    // Enable etag for caching
+  index: false,  // Disable directory listing for security
+}));
 
 // Check database connection
 pool.getConnection((err, connection) => {

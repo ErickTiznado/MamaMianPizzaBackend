@@ -5,6 +5,9 @@ const fs = require('fs');
 const multer = require('multer');
 const actualDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
+// Server base URL
+const SERVER_BASE_URL = 'http://bkcww48c8swokk0s4wo4gkk8.82.29.198.111.sslip.io';
+
 // Configure multer for image uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -73,8 +76,8 @@ exports.submitContent = (req, res) => {
         // Default precio if not provided
         const precio = req.body.precio || 0;
         
-        // Get file path or null if no file
-        const imagenPath = req.file ? '/uploads/' + req.file.filename : null;
+        // Get complete URL path for image
+        const imagenPath = req.file ? `${SERVER_BASE_URL}/uploads/${req.file.filename}` : null;
         
         try {
             if (!titulo || !descripcion || !porciones || !sesion || !categoria) {
