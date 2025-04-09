@@ -84,7 +84,7 @@ exports.submitContent = (req, res) => {
                     console.error('Error al obtener/crear la categoría', err);
                     return res.status(500).json({ message: 'Error al procesar la categoría' });
                 }
-                
+                console.log('ID de categoría:', idcategoria);
                 pool.query(
                     'INSERT INTO productos (titulo, descripcion, precio, porciones, seccion, id_categoria, activo, imagen, fecha_creacion, fecha_actualizacion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     [titulo, descripcion, precio, porciones, sesion, idcategoria, activo, imagenPath, actualDate, actDate],
