@@ -43,7 +43,7 @@ const getCategoryId = (categoryName, callback) => {
         
         if (results.length > 0) {
             console.log('Categoría existente:', results[0].id_categoria);
-            callback(null, results[0].id);
+            callback(null, results[0].id_categoria);
         } else {
             // If category doesn't exist, create it
             pool.query('INSERT INTO categorias (nombre, fecha_creacion) VALUES (?, ?)', [categoryName, actualDate], (err, result) => {
