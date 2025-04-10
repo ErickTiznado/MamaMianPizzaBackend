@@ -120,3 +120,14 @@ exports.getLasMasPopulares = (req, res) => {
         console.log('Productos obtenidos exitosamente', results);
     })
 }
+
+
+exports.getRecomendacionDeLacasa = (req, res) => {
+    pool.query('SELECT * FROM productos where seccion = "Recomendación de la casa" ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {
+        if(err){
+            console.error('Error al obtener productos', err);
+            return res.status(500).json({ message: 'Error al obtener productos' });
+        }
+        res.status(200).json({message: 'Productos obtenidos exitosamente', productos: results });            
+    })
+    }
