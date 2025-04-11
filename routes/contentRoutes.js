@@ -9,4 +9,6 @@ router.post('/submit', contentController.submitContent);
 router.get('/MostPopular', contentController.getLasMasPopulares);
 router.get('/recomendacion', contentController.getRecomendacionDeLacasa)
 router.get('/getMenu', contentController.getMenu);
+router.delete('/deleteContent/:id_producto', contentController.DeleteContent);
+router.put('/updateContent/:id_producto', contentController.updateContent);
 module.exports = router;

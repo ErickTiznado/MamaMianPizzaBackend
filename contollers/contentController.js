@@ -142,3 +142,57 @@ exports.getRecomendacionDeLacasa = (req, res) => {
             res.status(200).json({message: 'Productos obtenidos exitosamente', productos: results });            
         })
     }
+
+
+    exports.DeleteContent = (req, res) => {
+        const { id_producto } = req.params;
+        pool.query('DELETE FROM productos WHERE id_producto = ?', [id_producto], (err, results) => {
+            if(err){
+                console.error('Error al eliminar el producto', err);
+                return res.status(500).json({ message: 'Error al eliminar el producto' });
+            }
+            res.status(200).json({ message: 'Producto eliminado exitosamente' });
+        })
+    }
+
+    exports.UpdateContent = (req, res) => {
+        const { id_producto } = req.params;
+        const { titulo, descripcion, porciones, categoria, sesion } = req.body;
+        const activo = req.body.activo === 'true' || req.body.activo === true;
+        const actDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        
+        // Default precio if not provided
+        const precio = req.body.precio || 0;
+        
+        // Get complete URL path for image
+        const imagenPath = req.file ? `${SERVER_BASE_URL}/uploads/${req.file.filename}` : null;
+
+        try {
+            if (!titulo || !descripcion || !porciones || !sesion || !categoria) {
+                return res.status(400).json({ message: 'Faltan datos requeridos' });
+            }
+            
+            getCategoryId(categoria, (err, idcategoria) => {
+                if (err) {
+                    console.error('Error al obtener/crear la categoría', err);
+                    return res.status(500).json({ message: 'Error al procesar la categoría' });
+                }
+                console.log('ID de categoría:', idcategoria);
+                pool.query(
+                    'UPDATE productos SET titulo = ?, descripcion = ?, precio = ?, porciones = ?, seccion = ?, id_categoria = ?, activo = ?, imagen = ?, fecha_actualizacion = ? WHERE id_producto = ?',
+                    [titulo, descripcion, precio, porciones, sesion, idcategoria, activo, imagenPath, actDate, id_producto],
+                    (err, results) => {
+                        if (err) {
+                            console.error('Error al actualizar el producto', err);
+                            return res.status(500).json({ message: 'Error al actualizar el producto' });
+                        }
+
+                        res.status(200).json({ message: 'Producto actualizado exitosamente', id_producto: id_producto });
+                    }
+                );
+            });
+        } catch (error) {
+            console.error('Error en el servidor', error);
+            res.status(500).json({ message: 'Error en el servidor' });
+        }
+    }
