@@ -4,7 +4,7 @@ const inventoriController = require('../contollers/inventoriController');
 
 router.post('/addInventori', inventoriController.createInventarioItem);
 router.get('/getInventori', inventoriController.getAllInventarioItems);
-
+router.delete('/deleteInventori/:id_ingrediente', inventoriController.itemDelete);
 
 
 module.exports = router;

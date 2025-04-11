@@ -32,3 +32,15 @@ exports.getAllInventarioItems = (req, res) => {
         res.json(results);
     });
 }
+
+
+exports.itemDelete = (req, res) => {
+    const {id_ingrediente} = req.params;
+    pool.query('DELETE FROM ingredientes WHERE id_ingrediente = ?', [id_ingrediente], (err, results) =>{
+        if(err){
+            console.error('Error al eliminar el item de inventario', err);
+            return res.status(500).json({error: 'Error al eliminar el item de inventario'})
+        }
+        res.json({message: 'Item de inventario eliminado exitosamente'});
+    });
+}
