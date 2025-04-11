@@ -22,3 +22,13 @@ exports.createInventarioItem = (req, res) => {
     }
 
 }
+
+exports.getAllInventarioItems = (req, res) => {
+    pool.query('SELECT * FROM ingredientes', (err, results) =>{
+        if(err){
+            console.error('Error al obtener items de inventario', err);
+            return res.status(500).json({error: 'Error al obtener items de inventario'})
+        }
+        res.json(results);
+    });
+}
