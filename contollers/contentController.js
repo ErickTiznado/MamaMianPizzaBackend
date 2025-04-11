@@ -155,7 +155,7 @@ exports.getRecomendacionDeLacasa = (req, res) => {
         })
     }
 
-    exports.UpdateContent = (req, res) => {
+    exports.updateContent = (req, res) => {
         const { id_producto } = req.params;
         const { titulo, descripcion, porciones, categoria, sesion } = req.body;
         const activo = req.body.activo === 'true' || req.body.activo === true;
