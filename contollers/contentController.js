@@ -131,3 +131,14 @@ exports.getRecomendacionDeLacasa = (req, res) => {
         res.status(200).json({message: 'Productos obtenidos exitosamente', productos: results });            
     })
     }
+
+
+    exports.getMenu = (req, res) => {
+        pool.query('SELECT * FROM productos ORDER BY fecha_creacion DESC', (err, results) => {
+            if(err){
+                console.error('Error al obtener productos', err);
+                return res.status(500).json({ message: 'Error al obtener productos' });
+            }
+            res.status(200).json({message: 'Productos obtenidos exitosamente', productos: results });            
+        })
+    }

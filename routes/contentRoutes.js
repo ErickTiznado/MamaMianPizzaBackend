@@ -8,4 +8,5 @@ router.post('/submit', contentController.submitContent);
 
 router.get('/MostPopular', contentController.getLasMasPopulares);
 router.get('/recomendacion', contentController.getRecomendacionDeLacasa)
+router.get('/getMenu', contentController.getMenu);
 module.exports = router;
