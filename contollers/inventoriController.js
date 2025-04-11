@@ -9,7 +9,7 @@ exports.createInventarioItem = (req, res) => {
         if(!nombre || !categoria || !cantidad || !unidad || !fecha_caducidad || !proveedor || !costo){
             return res.status(400).json({message: 'Faltan datos requeridos'});
         }
-        pool.query('INSERT INTO ingredientes (nombre, cantidad_actual, unidad, fecha_caducidad, proveedor, costo) VALUES (?, ?, ?, ?, ?, ?)', [nombre, cantidad, unidad, fecha_caducidad, proveedor , costo], (err, results) =>{
+        pool.query('INSERT INTO ingredientes (nombre, categoria ,cantidad_actual, unidad, fecha_caducidad, proveedor, costo) VALUES (?, ?, ?, ?, ?, ?)', [nombre, cantidad, unidad, fecha_caducidad, proveedor , costo], (err, results) =>{
             if(err){
                 console.error('Error al crear el item de inventario', err);
                 return res.status(500).json({message: 'Error al crear el item de inventario'})
