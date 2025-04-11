@@ -9,6 +9,7 @@ const pool = require('./config/db');
 const userRoutes = require('./routes/userRoutes');
 const testRoutes = require('./routes/testRoutes');
 const contentRoutes = require('./routes/contentRoutes');
+const inventoriRoutes = require('./routes/inventoriRoutes');
 
 // Initialize express app
 const app = express();
@@ -62,6 +63,10 @@ pool.getConnection((err, connection) => {
 app.use('/api/users', userRoutes);
 app.use('/api/test', testRoutes);
 app.use('/api/content', contentRoutes);
+app.use('/api/inventory', inventoriRoutes);
+
+
+
 
 // Default route
 app.get('/', (req, res) => {
