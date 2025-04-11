@@ -3,6 +3,16 @@ const bcrypt = require('bcrypt');
 
 const path = require('path');   
 
-exports.createInventario = (req, res) => {
+exports.createInventarioItem = (req, res) => {
+    const {nombre, categoria, cantidad, unidad, fecha_caducidad, proveedor, costo} = req.body;
+    try{
+        if(!nombre || !categoria || !cantidad || !unidad || !fecha_caducidad || !proveedor || !costo){
+            return res.status(400).json({message: 'Faltan datos requeridos'});
+        }
+        pool.query('INSERT INTO ingredientes (nombre, cantidad_actual, unidad, fecha_caducidad, proveedor, costo) VALUES (?, ?, ?, ?, ?, ?)', [nombre, cantidad, unidad, fecha])
+    }catch(error){
+        console.error('Error en el servidor', error);
+        res.status(500).json({message: 'Error en el servidor'});
+    }
 
 }

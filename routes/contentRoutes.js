@@ -7,5 +7,5 @@ const { route } = require('./testRoutes');
 router.post('/submit', contentController.submitContent);
 
 router.get('/MostPopular', contentController.getLasMasPopulares);
-router.get/('recomendacion', contentController.getRecomendacionDeLacasa)
+router.get('/recomendacion', contentController.getRecomendacionDeLacasa)
 module.exports = router;
