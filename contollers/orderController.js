@@ -295,7 +295,7 @@ exports.getAllOrders = async (req, res) => {
             LEFT JOIN 
                 direcciones d ON p.id_direccion = d.id_direccion
             ORDER BY 
-                p.fecha_creacion DESC
+                p.id_pedido DESC
         `);
 
         // Para cada pedido, obtener sus detalles de productos
@@ -357,7 +357,7 @@ exports.getOrdersByStatus = async (req, res) => {
             WHERE 
                 p.estado = ?
             ORDER BY 
-                p.fecha_creacion DESC
+                p.id_pedido DESC
         `, [status]);
 
         // Para cada pedido, obtener sus detalles de productos
