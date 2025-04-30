@@ -44,3 +44,17 @@ exports.itemDelete = (req, res) => {
         res.json({message: 'Item de inventario eliminado exitosamente'});
     });
 }
+
+
+exports.updateInventarioItem = (req, res) => {
+    const { id_ingrediente } = req.params;
+    const { nombre, categoria, cantidad, unidad, fecha_caducidad, proveedor, costo } = req.body;
+
+    pool.query('UPDATE ingredientes SET nombre = ?, categoria = ?, cantidad_actual = ?, unidad = ?, fecha_caducidad = ?, proveedor = ?, costo = ? WHERE id_ingrediente = ?', [nombre, categoria, cantidad, unidad, fecha_caducidad, proveedor, costo, id_ingrediente], (err, results) => {
+        if (err) {
+            console.error('Error al actualizar el item de inventario', err);
+            return res.status(500).json({ message: 'Error al actualizar el item de inventario' });
+        }
+        res.json({ message: 'Item de inventario actualizado exitosamente' });
+    });
+}
