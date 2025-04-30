@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 
 // Helper function to generate a unique order code
 const generateOrderCode = () => {
@@ -10,6 +11,30 @@ const generateOrderCode = () => {
         result += characters.charAt(Math.floor(Math.random() * characters.length));
     }
     return result;
+};
+
+// Helper function to generate a numeric product ID that's safe for INT columns
+const generateProductId = (originalId) => {
+    // Si ya tenemos un ID que es un número dentro del rango seguro, lo usamos
+    if (originalId && typeof originalId === 'number' && originalId > 0 && originalId <= 2147483647) {
+        return originalId;
+    }
+    
+    // Si es un string o un número fuera de rango, generamos uno nuevo basado en hash
+    let hash;
+    if (originalId) {
+        // Generamos un hash basado en el ID original (timestamp u otro valor)
+        const idString = String(originalId);
+        hash = crypto.createHash('md5').update(idString).digest('hex');
+    } else {
+        // Generamos un ID completamente aleatorio
+        hash = crypto.randomBytes(16).toString('hex');
+    }
+    
+    // Convertimos los primeros 8 caracteres del hash a un número en base 16 (hexadecimal)
+    // y nos aseguramos que esté dentro del rango seguro para INT (menor a 2,147,483,647)
+    const numericId = parseInt(hash.substring(0, 8), 16) % 2147483647;
+    return numericId > 0 ? numericId : 1; // Asegurar que sea positivo
 };
 
 // Function to create a new order
@@ -144,6 +169,7 @@ exports.createOrder = async (req, res) => {
                 num_tarjeta_masked, nombre_tarjeta, subtotal, costo_envio, impuestos, 
                 aceptado_terminos, tiempo_estimado_entrega
             ) VALUES (?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+
             [
                 codigo_pedido, id_usuario, id_usuario_invitado, id_direccion, total, tipo_cliente, 
                 metodo_pago, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
@@ -157,20 +183,37 @@ exports.createOrder = async (req, res) => {
 
         // Add order details
         for (const producto of productos) {
+            // Generar un ID seguro para la base de datos
+            const id_producto = generateProductId(producto.id_producto);
+            
+            // Verificar si el producto existe en la base de datos
+            let productoExiste = false;
+            if (id_producto) {
+                const [existingProducts] = await connection.query(
+                    'SELECT id_producto FROM productos WHERE id_producto = ?',
+                    [id_producto]
+                );
+                productoExiste = existingProducts.length > 0;
+            }
+            
+            // Si el producto no existe en la base de datos pero tenemos suficiente información,
+            // podríamos registrarlo automáticamente (opcional)
+            // Esta parte depende de tu lógica de negocio
+            
             await connection.query(
                 `INSERT INTO detalle_pedidos (
                     id_pedido, id_producto, nombre_producto, cantidad, precio_unitario,
                     masa, tamano, instrucciones_especiales, subtotal
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
-                    id_pedido, producto.id_producto, producto.nombre_producto,
+                    id_pedido, id_producto, producto.nombre_producto,
                     producto.cantidad, producto.precio_unitario, producto.masa,
                     producto.tamano, producto.instrucciones_especiales,
                     producto.subtotal
                 ]
             );
         }
-
+        
         // Commit the transaction
         await connection.commit();
 
