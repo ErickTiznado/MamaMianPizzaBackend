@@ -302,13 +302,9 @@ exports.getAllOrders = async (req, res) => {
         for (const order of orders) {
             const [detalles] = await pool.promise().query(`
                 SELECT 
-                    dp.*,
-                    pr.nombre AS nombre_producto_original,
-                    pr.descripcion
+                    dp.*
                 FROM 
                     detalle_pedidos dp
-                LEFT JOIN
-                    productos pr ON dp.id_producto = pr.id_producto
                 WHERE 
                     dp.id_pedido = ?
             `, [order.id_pedido]);
@@ -364,13 +360,9 @@ exports.getOrdersByStatus = async (req, res) => {
         for (const order of orders) {
             const [detalles] = await pool.promise().query(`
                 SELECT 
-                    dp.*,
-                    pr.nombre AS nombre_producto_original,
-                    pr.descripcion
+                    dp.*
                 FROM 
                     detalle_pedidos dp
-                LEFT JOIN
-                    productos pr ON dp.id_producto = pr.id_producto
                 WHERE 
                     dp.id_pedido = ?
             `, [order.id_pedido]);
@@ -423,13 +415,9 @@ exports.getOrderById = async (req, res) => {
         // Obtener los detalles de productos del pedido
         const [detalles] = await pool.promise().query(`
             SELECT 
-                dp.*,
-                pr.nombre AS nombre_producto_original,
-                pr.descripcion
+                dp.*
             FROM 
                 detalle_pedidos dp
-            LEFT JOIN
-                productos pr ON dp.id_producto = pr.id_producto
             WHERE 
                 dp.id_pedido = ?
         `, [id]);
