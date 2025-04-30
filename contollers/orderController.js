@@ -47,6 +47,7 @@ exports.createOrder = async (req, res) => {
         const codigo_pedido = generateOrderCode();
 
         let id_usuario = null;
+        let id_usuario_invitado = null;
         let id_direccion = null;
 
         // Handle user data based on client type
@@ -85,31 +86,43 @@ exports.createOrder = async (req, res) => {
                 id_direccion = addressResult.insertId;
             }
         } else {
-            // For guest users, we only save their address
-            if (direccion.tipo_direccion === 'formulario') {
+            // Para clientes invitados, guardamos en la tabla usuarios_invitados
+            // Verificamos si ya existe un usuario invitado con ese número celular
+            const [existingGuests] = await connection.query(
+                'SELECT * FROM usuarios_invitados WHERE celular = ?',
+                [cliente.telefono]
+            );
+            
+            if (existingGuests.length > 0) {
+                // Si ya existe, usamos ese ID
+                id_usuario_invitado = existingGuests[0].id_usuario_invitado;
+                
+                // Actualizamos el registro para actualizar el timestamp de último pedido
+                await connection.query(
+                    'UPDATE usuarios_invitados SET ultimo_pedido = CURRENT_TIMESTAMP WHERE id_usuario_invitado = ?',
+                    [id_usuario_invitado]
+                );
+            } else {
+                // Si no existe, creamos un nuevo usuario invitado
                 const [guestResult] = await connection.query(
-                    'INSERT INTO usuarios (nombre, correo, celular, es_invitado) VALUES (?, ?, ?, TRUE)',
-                    [cliente.nombre, cliente.email || null, cliente.telefono]
+                    'INSERT INTO usuarios_invitados (nombre, apellido, celular) VALUES (?, ?, ?)',
+                    [cliente.nombre, cliente.apellido || '', cliente.telefono]
                 );
                 
-                id_usuario = guestResult.insertId;
-                
+                id_usuario_invitado = guestResult.insertId;
+            }
+
+            // Creamos la dirección asociada al usuario
+            if (direccion.tipo_direccion === 'formulario') {
                 const [addressResult] = await connection.query(
                     'INSERT INTO direcciones (id_usuario, direccion, tipo_direccion, pais, departamento, municipio) VALUES (?, ?, ?, ?, ?, ?)',
-                    [id_usuario, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio]
+                    [null, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio]
                 );
                 id_direccion = addressResult.insertId;
             } else {
-                const [guestResult] = await connection.query(
-                    'INSERT INTO usuarios (nombre, correo, celular, es_invitado) VALUES (?, ?, ?, TRUE)',
-                    [cliente.nombre, cliente.email || null, cliente.telefono]
-                );
-                
-                id_usuario = guestResult.insertId;
-                
                 const [addressResult] = await connection.query(
                     'INSERT INTO direcciones (id_usuario, tipo_direccion, latitud, longitud, precision_ubicacion, direccion_formateada) VALUES (?, ?, ?, ?, ?, ?)',
-                    [id_usuario, 'tiempo_real', direccion.latitud, direccion.longitud, direccion.precision_ubicacion, direccion.direccion_formateada]
+                    [null, 'tiempo_real', direccion.latitud, direccion.longitud, direccion.precision_ubicacion, direccion.direccion_formateada]
                 );
                 id_direccion = addressResult.insertId;
             }
@@ -118,13 +131,13 @@ exports.createOrder = async (req, res) => {
         // Create new order
         const [orderResult] = await connection.query(
             `INSERT INTO pedidos (
-                codigo_pedido, id_usuario, id_direccion, estado, total, tipo_cliente, 
+                codigo_pedido, id_usuario, id_usuario_invitado, id_direccion, estado, total, tipo_cliente, 
                 metodo_pago, nombre_cliente, apellido_cliente, telefono, email, 
                 num_tarjeta_masked, nombre_tarjeta, subtotal, costo_envio, impuestos, 
                 aceptado_terminos, tiempo_estimado_entrega
-            ) VALUES (?, ?, ?, 'pendiente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                codigo_pedido, id_usuario, id_direccion, total, tipo_cliente, 
+                codigo_pedido, id_usuario, id_usuario_invitado, id_direccion, total, tipo_cliente, 
                 metodo_pago, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
                 metodo_pago === 'tarjeta' ? req.body.num_tarjeta_masked : null, 
                 metodo_pago === 'tarjeta' ? req.body.nombre_tarjeta : null, 
