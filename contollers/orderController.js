@@ -88,8 +88,8 @@ exports.createOrder = async (req, res) => {
             // For guest users, we only save their address
             if (direccion.tipo_direccion === 'formulario') {
                 const [guestResult] = await connection.query(
-                    'INSERT INTO usuarios (nombre, correo, celular, es_invitado) VALUES (?, ?, ?, ?)',
-                    [cliente.nombre, cliente.email || null, cliente.telefono, true]
+                    'INSERT INTO usuarios (nombre, correo, celular, es_invitado) VALUES (?, ?, ?, TRUE)',
+                    [cliente.nombre, cliente.email || null, cliente.telefono]
                 );
                 
                 id_usuario = guestResult.insertId;
@@ -101,8 +101,8 @@ exports.createOrder = async (req, res) => {
                 id_direccion = addressResult.insertId;
             } else {
                 const [guestResult] = await connection.query(
-                    'INSERT INTO usuarios (nombre, correo, celular, es_invitado) VALUES (?, ?, ?, ?)',
-                    [cliente.nombre, cliente.email || null, cliente.telefono, true]
+                    'INSERT INTO usuarios (nombre, correo, celular, es_invitado) VALUES (?, ?, ?, TRUE)',
+                    [cliente.nombre, cliente.email || null, cliente.telefono]
                 );
                 
                 id_usuario = guestResult.insertId;
