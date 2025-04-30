@@ -112,17 +112,26 @@ exports.createOrder = async (req, res) => {
                 id_usuario_invitado = guestResult.insertId;
             }
 
+            // Para resolver el problema con el id_usuario null, primero necesitamos 
+            // crear un usuario básico que tenga id_usuario para asociarlo a las direcciones
+            // pero que esté marcado como usuario invitado
+            const [guestUserResult] = await connection.query(
+                'INSERT INTO usuarios (nombre, correo, contrasena, celular, es_invitado) VALUES (?, ?, ?, ?, TRUE)',
+                [cliente.nombre, cliente.email || `invitado_${Date.now()}@mamamianpizza.com`, bcrypt.hashSync(Math.random().toString(36).substring(2), 5), cliente.telefono]
+            );
+            id_usuario = guestUserResult.insertId;
+
             // Creamos la dirección asociada al usuario
             if (direccion.tipo_direccion === 'formulario') {
                 const [addressResult] = await connection.query(
                     'INSERT INTO direcciones (id_usuario, direccion, tipo_direccion, pais, departamento, municipio) VALUES (?, ?, ?, ?, ?, ?)',
-                    [null, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio]
+                    [id_usuario, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio]
                 );
                 id_direccion = addressResult.insertId;
             } else {
                 const [addressResult] = await connection.query(
                     'INSERT INTO direcciones (id_usuario, tipo_direccion, latitud, longitud, precision_ubicacion, direccion_formateada) VALUES (?, ?, ?, ?, ?, ?)',
-                    [null, 'tiempo_real', direccion.latitud, direccion.longitud, direccion.precision_ubicacion, direccion.direccion_formateada]
+                    [id_usuario, 'tiempo_real', direccion.latitud, direccion.longitud, direccion.precision_ubicacion, direccion.direccion_formateada]
                 );
                 id_direccion = addressResult.insertId;
             }
