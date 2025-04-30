@@ -29,7 +29,7 @@ const corsOptions = {
         'https://server.tiznadodev.com'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Allow-Methods', 'Access-Control-Allow-Headers', 'Origin', 'Accept', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Allow-Methods', 'Access-Control-Allow-Headers', 'Origin', 'Accept', 'X-Requested-With', 'access-control-allow-origin'],
     exposedHeaders: ['Content-Range', 'X-Content-Range'],
     credentials: true,
     preflightContinue: false,
