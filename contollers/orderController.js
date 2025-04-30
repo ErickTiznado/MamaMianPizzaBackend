@@ -271,17 +271,207 @@ exports.createOrder = async (req, res) => {
     }
 };
 
-// Function to get all orders (can be implemented later)
+// Function to get all orders
 exports.getAllOrders = async (req, res) => {
-    // Implementation for getting all orders
+    try {
+        // Obtener todos los pedidos con sus detalles y datos de cliente
+        const [orders] = await pool.promise().query(`
+            SELECT 
+                p.*,
+                u.nombre AS nombre_usuario,
+                ui.nombre AS nombre_invitado,
+                ui.apellido AS apellido_invitado,
+                ui.celular AS celular_invitado,
+                d.direccion,
+                d.latitud,
+                d.longitud,
+                d.direccion_formateada
+            FROM 
+                pedidos p
+            LEFT JOIN 
+                usuarios u ON p.id_usuario = u.id_usuario
+            LEFT JOIN 
+                usuarios_invitados ui ON p.id_usuario_invitado = ui.id_usuario_invitado
+            LEFT JOIN 
+                direcciones d ON p.id_direccion = d.id_direccion
+            ORDER BY 
+                p.fecha_creacion DESC
+        `);
+
+        // Para cada pedido, obtener sus detalles de productos
+        for (const order of orders) {
+            const [detalles] = await pool.promise().query(`
+                SELECT 
+                    dp.*,
+                    pr.nombre AS nombre_producto_original,
+                    pr.descripcion
+                FROM 
+                    detalle_pedidos dp
+                LEFT JOIN
+                    productos pr ON dp.id_producto = pr.id_producto
+                WHERE 
+                    dp.id_pedido = ?
+            `, [order.id_pedido]);
+            
+            order.detalles = detalles;
+        }
+
+        res.json(orders);
+    } catch (error) {
+        console.error('Error al obtener los pedidos:', error);
+        res.status(500).json({ message: 'Error al obtener los pedidos', error: error.message });
+    }
 };
 
-// Function to get order by ID (can be implemented later)
+// Function to get orders by status
+exports.getOrdersByStatus = async (req, res) => {
+    try {
+        const { status } = req.params;
+        
+        // Validar que el estado proporcionado sea válido
+        const estadosValidos = ['pendiente', 'en_proceso', 'entregado', 'cancelado'];
+        if (!estadosValidos.includes(status)) {
+            return res.status(400).json({ message: 'Estado de pedido no válido' });
+        }
+        
+        // Obtener pedidos filtrados por estado
+        const [orders] = await pool.promise().query(`
+            SELECT 
+                p.*,
+                u.nombre AS nombre_usuario,
+                ui.nombre AS nombre_invitado,
+                ui.apellido AS apellido_invitado,
+                ui.celular AS celular_invitado,
+                d.direccion,
+                d.latitud,
+                d.longitud,
+                d.direccion_formateada
+            FROM 
+                pedidos p
+            LEFT JOIN 
+                usuarios u ON p.id_usuario = u.id_usuario
+            LEFT JOIN 
+                usuarios_invitados ui ON p.id_usuario_invitado = ui.id_usuario_invitado
+            LEFT JOIN 
+                direcciones d ON p.id_direccion = d.id_direccion
+            WHERE 
+                p.estado = ?
+            ORDER BY 
+                p.fecha_creacion DESC
+        `, [status]);
+
+        // Para cada pedido, obtener sus detalles de productos
+        for (const order of orders) {
+            const [detalles] = await pool.promise().query(`
+                SELECT 
+                    dp.*,
+                    pr.nombre AS nombre_producto_original,
+                    pr.descripcion
+                FROM 
+                    detalle_pedidos dp
+                LEFT JOIN
+                    productos pr ON dp.id_producto = pr.id_producto
+                WHERE 
+                    dp.id_pedido = ?
+            `, [order.id_pedido]);
+            
+            order.detalles = detalles;
+        }
+
+        res.json(orders);
+    } catch (error) {
+        console.error(`Error al obtener los pedidos con estado ${req.params.status}:`, error);
+        res.status(500).json({ message: 'Error al obtener los pedidos', error: error.message });
+    }
+};
+
+// Function to get order by ID
 exports.getOrderById = async (req, res) => {
-    // Implementation for getting an order by ID
+    try {
+        const { id } = req.params;
+        
+        // Obtener los detalles del pedido específico
+        const [orders] = await pool.promise().query(`
+            SELECT 
+                p.*,
+                u.nombre AS nombre_usuario,
+                ui.nombre AS nombre_invitado,
+                ui.apellido AS apellido_invitado,
+                ui.celular AS celular_invitado,
+                d.direccion,
+                d.latitud,
+                d.longitud,
+                d.direccion_formateada
+            FROM 
+                pedidos p
+            LEFT JOIN 
+                usuarios u ON p.id_usuario = u.id_usuario
+            LEFT JOIN 
+                usuarios_invitados ui ON p.id_usuario_invitado = ui.id_usuario_invitado
+            LEFT JOIN 
+                direcciones d ON p.id_direccion = d.id_direccion
+            WHERE 
+                p.id_pedido = ?
+        `, [id]);
+        
+        if (orders.length === 0) {
+            return res.status(404).json({ message: 'Pedido no encontrado' });
+        }
+        
+        const order = orders[0];
+        
+        // Obtener los detalles de productos del pedido
+        const [detalles] = await pool.promise().query(`
+            SELECT 
+                dp.*,
+                pr.nombre AS nombre_producto_original,
+                pr.descripcion
+            FROM 
+                detalle_pedidos dp
+            LEFT JOIN
+                productos pr ON dp.id_producto = pr.id_producto
+            WHERE 
+                dp.id_pedido = ?
+        `, [id]);
+        
+        order.detalles = detalles;
+        
+        res.json(order);
+    } catch (error) {
+        console.error(`Error al obtener el pedido con ID ${req.params.id}:`, error);
+        res.status(500).json({ message: 'Error al obtener el pedido', error: error.message });
+    }
 };
 
-// Function to update order status (can be implemented later)
-exports.updateOrder = async (req, res) => {
-    // Implementation for updating an order
+// Function to update order status
+exports.updateOrderStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { estado } = req.body;
+        
+        // Validar que el estado proporcionado sea válido
+        const estadosValidos = ['pendiente', 'en_proceso', 'entregado', 'cancelado'];
+        if (!estadosValidos.includes(estado)) {
+            return res.status(400).json({ message: 'Estado de pedido no válido' });
+        }
+        
+        // Actualizar el estado del pedido
+        const [result] = await pool.promise().query(
+            'UPDATE pedidos SET estado = ? WHERE id_pedido = ?',
+            [estado, id]
+        );
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Pedido no encontrado' });
+        }
+        
+        res.json({ 
+            message: 'Estado del pedido actualizado correctamente',
+            id_pedido: id,
+            nuevo_estado: estado
+        });
+    } catch (error) {
+        console.error(`Error al actualizar el estado del pedido con ID ${req.params.id}:`, error);
+        res.status(500).json({ message: 'Error al actualizar el estado del pedido', error: error.message });
+    }
 };
