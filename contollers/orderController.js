@@ -64,7 +64,7 @@ exports.createOrder = async (req, res) => {
             return res.status(400).json({ message: 'Faltan datos requeridos para el pedido' });
         }
 
-        if (!Array.isArray(productos) || productos.length === 0) { || productos.length === 0
+        if (!Array.isArray(productos) || productos.length === 0) {
             return res.status(400).json({ message: 'El pedido debe contener al menos un producto' });
         }
 
@@ -279,356 +279,53 @@ exports.createOrder = async (req, res) => {
                 console.error(`Error al procesar detalle del pedido para producto ${producto.nombre_producto}:`, detailError);
                 console.error('Datos del producto con error:', JSON.stringify(producto));
                 
-                // Añadir a
-// Function to get all orders
-exports.getAllOrders = async (req, res) => {
-    try {
-        // Obtener todos los pedidos con sus detalles y datos de cliente
-        const [orders] = await pool.promise().query(`
-            SELECT 
-                p.*,
-                u.nombre AS nombre_usuario,
-                ui.nombre AS nombre_invitado,
-                ui.apellido AS apellido_invitado,
-                ui.celular AS celular_invitado,
-                d.direccion,
-                d.latitud,
-                d.longitud,
-                d.direccion_formateada
-            FROM 
-                pedidos p
-            LEFT JOIN 
-                usuarios u ON p.id_usuario = u.id_usuario
-            LEFT JOIN 
-                usuarios_invitados ui ON p.id_usuario_invitado = ui.id_usuario_invitado
-            LEFT JOIN 
-                direcciones d ON p.id_direccion = d.id_direccion
-            ORDER BY 
-                p.fecha_pedido DESC
-        `);
-
-        // Para cada pedido, obtener sus detalles de productos
-        for (const order of orders) {
-            const [detalles] = await pool.promise().query(`
-                SELECT 
-                    dp.*,
-                    pr.titulo AS nombre_producto_original,
-                    pr.descripcion
-                FROM 
-                    detalle_pedidos dp
-                LEFT JOIN
-                    productos pr ON dp.id_producto = pr.id_producto
-                WHERE 
-                    dp.id_pedido = ?
-            `, [order.id_pedido]);
-            
-            order.detalles = detalles;
-        }
-
-        res.json(orders);
-    } catch (error) {
-        console.error('Error al obtener los pedidos:', error);
-        res.status(500).json({ message: 'Error al obtener los pedidos', error: error.message });
-    }
-};
-
-// Function to get orders by status
-exports.getOrdersByStatus = async (req, res) => {
-    try {
-        const { status } = req.params;
-        
-        // Validar que el estado proporcionado sea válido
-        const estadosValidos = ['pendiente', 'en_proceso', 'entregado', 'cancelado'];
-        if (!estadosValidos.includes(status)) {
-            return res.status(400).json({ message: 'Estado de pedido no válido' });
-        }
-        
-        // Obtener pedidos filtrados por estado
-        const [orders] = await pool.promise().query(`
-            SELECT 
-                p.*,
-                u.nombre AS nombre_usuario,
-                ui.nombre AS nombre_invitado,
-                ui.apellido AS apellido_invitado,
-                ui.celular AS celular_invitado,
-                d.direccion,
-                d.latitud,
-                d.longitud,
-                d.direccion_formateada
-            FROM 
-                pedidos p
-            LEFT JOIN 
-                usuarios u ON p.id_usuario = u.id_usuario
-            LEFT JOIN 
-                usuarios_invitados ui ON p.id_usuario_invitado = ui.id_usuario_invitado
-            LEFT JOIN 
-                direcciones d ON p.id_direccion = d.id_direccion
-            WHERE 
-                p.estado = ?
-            ORDER BY 
-                p.fecha_pedido DESC
-        `, [status]);
-
-        // Para cada pedido, obtener sus detalles de productos
-        for (const order of orders) {
-            const [detalles] = await pool.promise().query(`
-                SELECT 
-                    dp.*,
-                    pr.titulo AS nombre_producto_original,
-                    pr.descripcion
-                FROM 
-                    detalle_pedidos dp
-                LEFT JOIN
-                    productos pr ON dp.id_producto = pr.id_producto
-                WHERE 
-                    dp.id_pedido = ?
-            `, [order.id_pedido]);
-            
-            order.detalles = detalles;
-        }
-
-        res.json(orders);
-    } catch (error) {
-        console.error(`Error al obtener los pedidos con estado ${req.params.status}:`, error);
-        res.status(500).json({ message: 'Error al obtener los pedidos', error: error.message });
-    }
-};
-
-// Function to get order by ID
-exports.getOrderById = async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        console.log(`Buscando pedido con ID: ${id}`);
-        
-        // Obtener los detalles del pedido específico
-        const [orders] = await pool.promise().query(`
-            SELECT 
-                p.*,
-                u.nombre AS nombre_usuario,
-                ui.nombre AS nombre_invitado,
-                ui.apellido AS apellido_invitado,
-                ui.celular AS celular_invitado,
-                d.direccion,
-                d.latitud,
-                d.longitud,
-                d.direccion_formateada
-            FROM 
-                pedidos p
-            LEFT JOIN 
-                usuarios u ON p.id_usuario = u.id_usuario
-            LEFT JOIN 
-                usuarios_invitados ui ON p.id_usuario_invitado = ui.id_usuario_invitado
-            LEFT JOIN 
-                direcciones d ON p.id_direccion = d.id_direccion
-            WHERE 
-                p.id_pedido = ?
-        `, [id]);
-        
-        if (orders.length === 0) {
-            return res.status(404).json({ message: 'Pedido no encontrado' });
-        }
-        
-        const order = orders[0];
-        console.log(`Pedido encontrado: ${order.codigo_pedido}`);
-        
-        // Verificamos primero si existen detalles para este pedido
-        const [checkDetalles] = await pool.promise().query(`
-            SELECT COUNT(*) as count FROM detalle_pedidos WHERE id_pedido = ?
-        `, [id]);
-        
-        console.log(`Número de detalles encontrados: ${checkDetalles[0].count}`);
-        
-        // Si no hay detalles, realizamos la inserción manual para debug
-        if (checkDetalles[0].count === 0) {
-            console.log(`No se encontraron detalles para el pedido ${id}. Puede ser necesario verificar la tabla detalle_pedidos.`);
-        }
-        
-        // Obtener los detalles de productos del pedido
-        const detallesQuery = `
-            SELECT 
-                dp.*,
-                pr.titulo AS nombre_producto_original,
-                pr.descripcion
-            FROM 
-                detalle_pedidos dp
-            LEFT JOIN
-                productos pr ON dp.id_producto = pr.id_producto
-            WHERE 
-                dp.id_pedido = ?
-        `;
-        console.log(`Ejecutando consulta de detalles: ${detallesQuery.replace(/\s+/g, ' ')} con ID: ${id}`);
-        
-        const [detalles] = await pool.promise().query(detallesQuery, [id]);
-        console.log(`Detalles recuperados: ${detalles.length}`);
-        
-        order.detalles = detalles;
-        
-        res.json(order);
-    } catch (error) {
-        console.error(`Error al obtener el pedido con ID ${req.params.id}:`, error);
-        res.status(500).json({ message: 'Error al obtener el pedido', error: error.message });
-    }
-};
-
-// Function to update order status
-exports.updateOrderStatus = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { estado } = req.body;
-        
-        // Validar que el estado proporcionado sea válido
-        const estadosValidos = ['pendiente', 'en_proceso', 'entregado', 'cancelado'];
-        if (!estadosValidos.includes(estado)) {
-            return res.status(400).json({ message: 'Estado de pedido no válido' });
-        }
-        
-        // Actualizar el estado del pedido
-        const [result] = await pool.promise().query(
-            'UPDATE pedidos SET estado = ? WHERE id_pedido = ?',
-            [estado, id]
-        );
-        
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: 'Pedido no encontrado' });
-        }
-        
-        res.json({ 
-            message: 'Estado del pedido actualizado correctamente',
-            id_pedido: id,
-            nuevo_estado: estado
-        });
-    } catch (error) {
-        console.error(`Error al actualizar el estado del pedido con ID ${req.params.id}:`, error);
-        res.status(500).json({ message: 'Error al actualizar el estado del pedido', error: error.message });
-    }
-};
-
-// Function to check and repair orders without details
-exports.checkOrderDetails = async (req, res) => {
-    let connection;
-    try {
-        connection = await pool.promise().getConnection();
-        await connection.beginTransaction();
-        
-        const { id_pedido } = req.params;
-        const { productos } = req.body;
-        
-        // Verificar si existen detalles para este pedido
-        const [checkDetalles] = await connection.query(
-            'SELECT COUNT(*) as count FROM detalle_pedidos WHERE id_pedido = ?',
-            [id_pedido]
-        );
-
-        if (checkDetalles[0].count > 0) {
-            // Si ya existen detalles, informamos que todo está bien
-            await connection.commit();
-            return res.status(200).json({
-                message: 'El pedido ya tiene detalles registrados',
-                detalles_count: checkDetalles[0].count
-            });
-        }
-
-        // Si no hay productos en la solicitud, devolvemos error
-        if (!productos || !Array.isArray(productos) || productos.length === 0) {
-            await connection.rollback();
-            return res.status(400).json({
-                message: 'Se requieren productos para reparar el pedido',
-                error: 'El array de productos está vacío o no fue proporcionado'
-            });
-        }
-
-        // Array para almacenar los detalles insertados
-        const detallesInsertados = [];
-
-        // Insertar los detalles del pedido
-        for (const producto of productos) {
-            try {
-                if (!producto.nombre_producto || !producto.cantidad || !producto.precio_unitario) {
-                    console.error('Datos de producto incompletos:', producto);
-                    continue;
-                }
-
-                // Buscar si el producto existe por título
-                const [productosByName] = await connection.query(
-                    'SELECT id_producto FROM productos WHERE titulo = ?',
-                    [producto.nombre_producto]
-                );
-
-                let id_producto_a_usar = null;
-
-                if (productosByName.length > 0) {
-                    id_producto_a_usar = productosByName[0].id_producto;
-                    console.log(`Producto encontrado: ${producto.nombre_producto}, ID: ${id_producto_a_usar}`);
-                } else {
-                    // Crear producto si no existe
-                    const [newProductResult] = await connection.query(
-                        'INSERT INTO productos (titulo, precio, descripcion) VALUES (?, ?, ?)',
-                        [producto.nombre_producto, producto.precio_unitario, 'Producto añadido desde reparación de pedido']
-                    );
-                    
-                    id_producto_a_usar = newProductResult.insertId;
-                    console.log(`Nuevo producto creado: ${producto.nombre_producto}, ID: ${id_producto_a_usar}`);
-                }
-                
-                // Calcular subtotal si no viene en la petición
-                const subtotal = producto.subtotal || (producto.cantidad * producto.precio_unitario);
-                
-                // Insertar detalle del pedido
-                const [detailResult] = await connection.query(
-                    `INSERT INTO detalle_pedidos (
-                        id_pedido, id_producto, nombre_producto, cantidad, precio_unitario,
-                        masa, tamano, instrucciones_especiales, subtotal
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [
-                        id_pedido, id_producto_a_usar, producto.nombre_producto,
-                        producto.cantidad, producto.precio_unitario, producto.masa || null,
-                        producto.tamano || null, producto.instrucciones_especiales || null,
-                        subtotal
-                    ]
-                );
-                
-                detallesInsertados.push({
-                    id_detalle: detailResult.insertId,
-                    nombre_producto: producto.nombre_producto,
-                    cantidad: producto.cantidad,
-                    precio_unitario: producto.precio_unitario,
-                    subtotal
+                // Añadir a la lista de errores
+                erroresDetalles.push({
+                    producto: producto.nombre_producto,
+                    error: detailError.message
                 });
-                
-                console.log(`Detalle insertado para pedido ${id_pedido}, producto ${producto.nombre_producto}`);
-            } catch (error) {
-                console.error(`Error al procesar producto ${producto.nombre_producto}:`, error);
             }
         }
         
-        // Verificar si se insertaron detalles
+        // Verificar si hay algún detalle insertado
         if (detallesInsertados.length === 0) {
+            // Si no se pudo insertar ningún detalle, hacemos rollback y devolvemos error
             await connection.rollback();
-            return res.status(500).json({
-                message: 'No se pudo reparar el pedido',
-                error: 'No se pudo insertar ningún detalle'
+            return res.status(500).json({ 
+                message: 'No se pudo crear ningún detalle del pedido',
+                errores: erroresDetalles
             });
         }
         
-        // Confirmar la transacción
+        // Verificamos que los detalles fueron guardados
+        const [verificacionDetalles] = await connection.query(
+            'SELECT COUNT(*) as count FROM detalle_pedidos WHERE id_pedido = ?',
+            [id_pedido]
+        );
+        
+        console.log(`Detalles verificados: ${verificacionDetalles[0].count} de ${productos.length} productos`);
+        
+        // Commit the transaction
         await connection.commit();
-        
-        return res.status(200).json({
-            message: 'Pedido reparado exitosamente',
-            detalles_insertados: detallesInsertados.length,
-            detalles: detallesInsertados
+
+        // Send success response
+        res.status(201).json({
+            message: 'Pedido creado exitosamente',
+            id_pedido: id_pedido,
+            codigo_pedido: codigo_pedido,
+            productos_registrados: detallesInsertados.length,
+            total_productos: productos.length,
+            detalles: detallesInsertados,
+            errores: erroresDetalles.length > 0 ? erroresDetalles : undefined
         });
-        
+
     } catch (error) {
+        // Rollback transaction in case of error
         if (connection) {
             await connection.rollback();
         }
-        console.error('Error al reparar el pedido:', error);
-        return res.status(500).json({
-            message: 'Error al reparar el pedido',
-            error: error.message
-        });
+        console.error('Error al crear el pedido:', error);
+        res.status(500).json({ message: 'Error al procesar el pedido', error: error.message });
     } finally {
         if (connection) {
             connection.release();
