@@ -183,35 +183,68 @@ exports.createOrder = async (req, res) => {
 
         // Add order details
         for (const producto of productos) {
-            // Generar un ID seguro para la base de datos
-            const id_producto = generateProductId(producto.id_producto);
-            
-            // Verificar si el producto existe en la base de datos
-            let productoExiste = false;
-            if (id_producto) {
-                const [existingProducts] = await connection.query(
-                    'SELECT id_producto FROM productos WHERE id_producto = ?',
-                    [id_producto]
+            try {
+                // Generar un ID seguro para la base de datos si viene uno del frontend
+                const id_producto_original = producto.id_producto ? generateProductId(producto.id_producto) : null;
+                
+                // Primero buscamos si el producto existe
+                let id_producto_a_usar = null;
+                
+                // Buscamos primero por nombre del producto para mayor precisión
+                const [productosByName] = await connection.query(
+                    'SELECT id_producto FROM productos WHERE nombre = ?',
+                    [producto.nombre_producto]
                 );
-                productoExiste = existingProducts.length > 0;
+                
+                if (productosByName.length > 0) {
+                    // Si encontramos el producto por nombre, usamos ese ID
+                    id_producto_a_usar = productosByName[0].id_producto;
+                } else if (id_producto_original) {
+                    // Si no encontramos por nombre pero tenemos un ID original, verificamos si existe
+                    const [productsById] = await connection.query(
+                        'SELECT id_producto FROM productos WHERE id_producto = ?',
+                        [id_producto_original]
+                    );
+                    
+                    if (productsById.length > 0) {
+                        id_producto_a_usar = id_producto_original;
+                    }
+                }
+                
+                if (!id_producto_a_usar) {
+                    // El producto no existe en la base de datos.
+                    // Tenemos dos opciones: 
+                    // 1. Insertar un producto nuevo (enfoque actual)
+                    // 2. Permitir IDs NULL (requiere modificar la estructura de la tabla)
+                    
+                    // Insertamos un producto básico en la tabla productos
+                    const [newProductResult] = await connection.query(
+                        'INSERT INTO productos (nombre, precio, descripcion) VALUES (?, ?, ?)',
+                        [producto.nombre_producto, producto.precio_unitario, 'Producto agregado desde pedido']
+                    );
+                    
+                    id_producto_a_usar = newProductResult.insertId;
+                }
+                
+                // Insertamos el detalle del pedido con el ID de producto adecuado
+                await connection.query(
+                    `INSERT INTO detalle_pedidos (
+                        id_pedido, id_producto, nombre_producto, cantidad, precio_unitario,
+                        masa, tamano, instrucciones_especiales, subtotal
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        id_pedido, id_producto_a_usar, producto.nombre_producto,
+                        producto.cantidad, producto.precio_unitario, producto.masa,
+                        producto.tamano, producto.instrucciones_especiales,
+                        producto.subtotal
+                    ]
+                );
+            } catch (detailError) {
+                console.error('Error al procesar detalle del pedido:', detailError);
+                // Si hay un error con un detalle específico, continuamos con los siguientes
+                // pero registramos el error para depuración
+                continue;
             }
-            
-            // Si el producto no existe en la base de datos pero tenemos suficiente información,
-            // podríamos registrarlo automáticamente (opcional)
-            // Esta parte depende de tu lógica de negocio
-            
-            await connection.query(
-                `INSERT INTO detalle_pedidos (
-                    id_pedido, id_producto, nombre_producto, cantidad, precio_unitario,
-                    masa, tamano, instrucciones_especiales, subtotal
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    id_pedido, id_producto, producto.nombre_producto,
-                    producto.cantidad, producto.precio_unitario, producto.masa,
-                    producto.tamano, producto.instrucciones_especiales,
-                    producto.subtotal
-                ]
-            );
         }
         
         // Commit the transaction
