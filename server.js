@@ -23,7 +23,8 @@ const corsOptions = {
         'http://q8w8g48gwkco444g8sow000g.82.29.198.111.sslip.io',
         'http://bkcww48c8swokk0s4wo4gkk8.82.29.198.111.sslip.io',
         'http://jog88c0w04wc804kw8gcgc8o.82.29.198.111.sslip.io',
-        'https://contmigo.tiznadodev.com'  // Agregado
+        'https://contmigo.tiznadodev.com',
+        'https://panelmama.tiznadodev.com'  // Agregado
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
