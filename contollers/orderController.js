@@ -114,9 +114,8 @@ exports.createOrder = async (req, res) => {
 
             // Para resolver el problema con el id_usuario null, primero necesitamos 
             // crear un usuario básico que tenga id_usuario para asociarlo a las direcciones
-            // pero que esté marcado como usuario invitado
             const [guestUserResult] = await connection.query(
-                'INSERT INTO usuarios (nombre, correo, contrasena, celular, es_invitado) VALUES (?, ?, ?, ?, TRUE)',
+                'INSERT INTO usuarios (nombre, correo, contrasena, celular) VALUES (?, ?, ?, ?)',
                 [cliente.nombre, cliente.email || `invitado_${Date.now()}@mamamianpizza.com`, bcrypt.hashSync(Math.random().toString(36).substring(2), 5), cliente.telefono]
             );
             id_usuario = guestUserResult.insertId;
