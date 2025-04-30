@@ -295,16 +295,20 @@ exports.getAllOrders = async (req, res) => {
             LEFT JOIN 
                 direcciones d ON p.id_direccion = d.id_direccion
             ORDER BY 
-                p.id_pedido DESC
+                p.fecha_pedido DESC
         `);
 
         // Para cada pedido, obtener sus detalles de productos
         for (const order of orders) {
             const [detalles] = await pool.promise().query(`
                 SELECT 
-                    dp.*
+                    dp.*,
+                    pr.titulo AS nombre_producto_original,
+                    pr.descripcion
                 FROM 
                     detalle_pedidos dp
+                LEFT JOIN
+                    productos pr ON dp.id_producto = pr.id_producto
                 WHERE 
                     dp.id_pedido = ?
             `, [order.id_pedido]);
@@ -353,16 +357,20 @@ exports.getOrdersByStatus = async (req, res) => {
             WHERE 
                 p.estado = ?
             ORDER BY 
-                p.id_pedido DESC
+                p.fecha_pedido DESC
         `, [status]);
 
         // Para cada pedido, obtener sus detalles de productos
         for (const order of orders) {
             const [detalles] = await pool.promise().query(`
                 SELECT 
-                    dp.*
+                    dp.*,
+                    pr.titulo AS nombre_producto_original,
+                    pr.descripcion
                 FROM 
                     detalle_pedidos dp
+                LEFT JOIN
+                    productos pr ON dp.id_producto = pr.id_producto
                 WHERE 
                     dp.id_pedido = ?
             `, [order.id_pedido]);
@@ -415,9 +423,13 @@ exports.getOrderById = async (req, res) => {
         // Obtener los detalles de productos del pedido
         const [detalles] = await pool.promise().query(`
             SELECT 
-                dp.*
+                dp.*,
+                pr.titulo AS nombre_producto_original,
+                pr.descripcion
             FROM 
                 detalle_pedidos dp
+            LEFT JOIN
+                productos pr ON dp.id_producto = pr.id_producto
             WHERE 
                 dp.id_pedido = ?
         `, [id]);
