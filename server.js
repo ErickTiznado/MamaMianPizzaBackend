@@ -25,11 +25,16 @@ const corsOptions = {
         'http://bkcww48c8swokk0s4wo4gkk8.82.29.198.111.sslip.io',
         'http://jog88c0w04wc804kw8gcgc8o.82.29.198.111.sslip.io',
         'https://contmigo.tiznadodev.com',
-        'https://panelmama.tiznadodev.com'  // Agregado
+        'https://panelmama.tiznadodev.com',
+        'https://server.tiznadodev.com'
     ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Allow-Methods', 'Access-Control-Allow-Headers', 'Origin', 'Accept', 'X-Requested-With'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
     credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+    maxAge: 86400 // 24 hours
 };
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
