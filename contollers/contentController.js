@@ -6,7 +6,7 @@ const multer = require('multer');
 const actualDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
 // Server base URL
-const SERVER_BASE_URL = 'http://bkcww48c8swokk0s4wo4gkk8.82.29.198.111.sslip.io';
+const SERVER_BASE_URL = 'https://server.tiznadodev.com';
 
 // Configure multer for image uploads
 const storage = multer.diskStorage({
