@@ -155,6 +155,18 @@ exports.getRecomendacionDeLacasa = (req, res) => {
         })
     }
 
+    exports.TotalProducts = (req, res) => {
+        pool.query('SELECT COUNT(*) as total FROM productos', (err, results) => {
+            if(err){
+                console.error('Error al obtener el total de productos', err);
+                return res.status(500).json({ message: 'Error al obtener el total de productos' });
+            }
+            res.status(200).json({ message: 'Total de productos obtenidos exitosamente', total: results[0].total });
+        })
+    }
+
+
+
     exports.updateContent = (req, res) => {
         const { id_producto } = req.params;
         const { titulo, descripcion, porciones, categoria, sesion } = req.body;

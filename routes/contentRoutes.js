@@ -11,4 +11,5 @@ router.get('/recomendacion', contentController.getRecomendacionDeLacasa)
 router.get('/getMenu', contentController.getMenu);
 router.delete('/deleteContent/:id_producto', contentController.DeleteContent);
 router.put('/updateContent/:id_producto', contentController.updateContent);
+router.get('/totalProducts', contentController.TotalProducts);
 module.exports = router;
