@@ -11,6 +11,7 @@ const testRoutes = require('./routes/testRoutes');
 const contentRoutes = require('./routes/contentRoutes');
 const inventoriRoutes = require('./routes/inventoriRoutes');
 const orderRoutes = require('./routes/orderRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 // Initialize express app
 const app = express();
@@ -68,8 +69,7 @@ app.use('/api/test', testRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/inventory', inventoriRoutes);
 app.use('/api/orders', orderRoutes);
-
-
+app.use('/api/notifications', notificationRoutes);
 
 // Default route
 app.get('/', (req, res) => {
