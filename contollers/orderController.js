@@ -248,14 +248,14 @@ exports.createOrder = async (req, res) => {
                 // Insertamos el detalle del pedido con el ID de producto adecuado
                 const detalleSql = `INSERT INTO detalle_pedidos (
                     id_pedido, id_producto, nombre_producto, cantidad, precio_unitario,
-                    masa, tamano, instrucciones_especiales, subtotal
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    masa, tamano, instrucciones_especiales, subtotal, metodo_entrega
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
                 
                 const detalleParams = [
                     id_pedido, id_producto_a_usar, producto.nombre_producto,
                     producto.cantidad, producto.precio_unitario, producto.masa || null,
                     producto.tamano || null, producto.instrucciones_especiales || null,
-                    subtotalProducto
+                    subtotalProducto, producto.metodo_entrega !== undefined ? producto.metodo_entrega : 0
                 ];
                 
                 console.log(`Insertando detalle: ${JSON.stringify({
@@ -271,7 +271,8 @@ exports.createOrder = async (req, res) => {
                     nombre_producto: producto.nombre_producto,
                     cantidad: producto.cantidad,
                     precio_unitario: producto.precio_unitario,
-                    subtotal: subtotalProducto
+                    subtotal: subtotalProducto,
+                    metodo_entrega: producto.metodo_entrega !== undefined ? producto.metodo_entrega : 0
                 });
                 
                 console.log(`Detalle de pedido insertado con ID: ${detailResult.insertId}`);
@@ -631,13 +632,13 @@ exports.checkOrderDetails = async (req, res) => {
                 const [detailResult] = await connection.query(
                     `INSERT INTO detalle_pedidos (
                         id_pedido, id_producto, nombre_producto, cantidad, precio_unitario,
-                        masa, tamano, instrucciones_especiales, subtotal
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        masa, tamano, instrucciones_especiales, subtotal, metodo_entrega
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         id_pedido, id_producto_a_usar, producto.nombre_producto,
                         producto.cantidad, producto.precio_unitario, producto.masa || null,
                         producto.tamano || null, producto.instrucciones_especiales || null,
-                        subtotal
+                        subtotal, producto.metodo_entrega !== undefined ? producto.metodo_entrega : 0
                     ]
                 );
                 
@@ -646,7 +647,8 @@ exports.checkOrderDetails = async (req, res) => {
                     nombre_producto: producto.nombre_producto,
                     cantidad: producto.cantidad,
                     precio_unitario: producto.precio_unitario,
-                    subtotal
+                    subtotal,
+                    metodo_entrega: producto.metodo_entrega !== undefined ? producto.metodo_entrega : 0
                 });
                 
                 console.log(`Detalle insertado para pedido ${id_pedido}, producto ${producto.nombre_producto}`);
