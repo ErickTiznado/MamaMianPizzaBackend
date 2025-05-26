@@ -49,6 +49,54 @@ exports.countOrders = (req, res) => {
 });
 }
 
+// Function to get order statistics by time period (today, weekly, monthly)
+exports.getOrderStatistics = async (req, res) => {
+    try {
+        const connection = await pool.promise().getConnection();
+        
+        // Query para contar pedidos de hoy
+        const [dailyResults] = await connection.query(`
+            SELECT COUNT(*) as total 
+            FROM pedidos 
+            WHERE DATE(fecha_pedido) = CURDATE()
+        `);
+        
+        // Query para contar pedidos de la semana actual (lunes a domingo)
+        const [weeklyResults] = await connection.query(`
+            SELECT COUNT(*) as total 
+            FROM pedidos 
+            WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)
+        `);
+        
+        // Query para contar pedidos del mes actual
+        const [monthlyResults] = await connection.query(`
+            SELECT COUNT(*) as total 
+            FROM pedidos 
+            WHERE YEAR(fecha_pedido) = YEAR(CURDATE()) AND MONTH(fecha_pedido) = MONTH(CURDATE())
+        `);
+        
+        // Liberar la conexión
+        connection.release();
+        
+        // Devolver resultados
+        res.status(200).json({
+            message: "Estadísticas de pedidos obtenidas exitosamente",
+            statistics: {
+                today: dailyResults[0].total,
+                week: weeklyResults[0].total,
+                month: monthlyResults[0].total
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener estadísticas de pedidos:', error);
+        res.status(500).json({
+            message: 'Error al obtener estadísticas de pedidos',
+            error: error.message
+        });
+    }
+};
+
 // Function to create a new order
 exports.createOrder = async (req, res) => {
     // Start a transaction

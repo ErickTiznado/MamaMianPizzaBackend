@@ -11,6 +11,7 @@ router.get('/orders/status/:status', orderController.getOrdersByStatus);
 router.get('/orders/:id', orderController.getOrderById);
 router.put('/orders/:id/status', orderController.updateOrderStatus);
 router.get('/orders/count', orderController.countOrders);
+router.get('/orders/statistics', orderController.getOrderStatistics);
 // Ruta para reparar pedidos sin detalles
 router.post('/orders/:id_pedido/repair', orderController.checkOrderDetails);
 
