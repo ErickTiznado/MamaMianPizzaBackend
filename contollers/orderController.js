@@ -2,6 +2,15 @@ const pool = require('../config/db');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 
+// Helper function to calculate growth percentage between two values
+const calculateGrowth = (currentValue, previousValue) => {
+    if (previousValue === 0) {
+        return currentValue > 0 ? 100 : 0; // Si antes era 0 y ahora hay algo, es 100% de crecimiento
+    }
+    const growth = ((currentValue - previousValue) / previousValue) * 100;
+    return parseFloat(growth.toFixed(2)); // Redondear a 2 decimales
+};
+
 // Helper function to generate a unique order code
 const generateOrderCode = () => {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -49,42 +58,115 @@ exports.countOrders = (req, res) => {
 });
 }
 
-// Function to get order statistics by time period (today, weekly, monthly)
+// Function to get order statistics by time period with comparative analysis
 exports.getOrderStatistics = async (req, res) => {
     try {
         const connection = await pool.promise().getConnection();
         
+        // ESTADÍSTICAS DEL DÍA ACTUAL Y COMPARATIVA
         // Query para contar pedidos de hoy
-        const [dailyResults] = await connection.query(`
+        const [currentDayResults] = await connection.query(`
             SELECT COUNT(*) as total 
             FROM pedidos 
             WHERE DATE(fecha_pedido) = CURDATE()
         `);
         
+        // Query para contar pedidos de ayer
+        const [previousDayResults] = await connection.query(`
+            SELECT COUNT(*) as total 
+            FROM pedidos 
+            WHERE DATE(fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+        `);
+        
+        // Query para contar pedidos del mismo día la semana pasada
+        const [sameDayLastWeekResults] = await connection.query(`
+            SELECT COUNT(*) as total 
+            FROM pedidos 
+            WHERE DATE(fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        `);
+        
+        // ESTADÍSTICAS DE LA SEMANA ACTUAL Y COMPARATIVA
         // Query para contar pedidos de la semana actual (lunes a domingo)
-        const [weeklyResults] = await connection.query(`
+        const [currentWeekResults] = await connection.query(`
             SELECT COUNT(*) as total 
             FROM pedidos 
             WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)
         `);
         
+        // Query para contar pedidos de la semana anterior
+        const [previousWeekResults] = await connection.query(`
+            SELECT COUNT(*) as total 
+            FROM pedidos 
+            WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 1 WEEK), 1)
+        `);
+        
+        // Query para contar pedidos de la misma semana el mes pasado
+        const [sameWeekLastMonthResults] = await connection.query(`
+            SELECT COUNT(*) as total 
+            FROM pedidos 
+            WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 4 WEEK), 1)
+        `);
+        
+        // ESTADÍSTICAS DEL MES ACTUAL Y COMPARATIVA
         // Query para contar pedidos del mes actual
-        const [monthlyResults] = await connection.query(`
+        const [currentMonthResults] = await connection.query(`
             SELECT COUNT(*) as total 
             FROM pedidos 
             WHERE YEAR(fecha_pedido) = YEAR(CURDATE()) AND MONTH(fecha_pedido) = MONTH(CURDATE())
         `);
+        
+        // Query para contar pedidos del mes anterior
+        const [previousMonthResults] = await connection.query(`
+            SELECT COUNT(*) as total 
+            FROM pedidos 
+            WHERE YEAR(fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) 
+            AND MONTH(fecha_pedido) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+        `);
+        
+        // Query para contar pedidos del mismo mes el año pasado
+        const [sameMonthLastYearResults] = await connection.query(`
+            SELECT COUNT(*) as total 
+            FROM pedidos 
+            WHERE YEAR(fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 YEAR)) 
+            AND MONTH(fecha_pedido) = MONTH(CURDATE())
+        `);
+        
+        // Calcular porcentajes de crecimiento
+        const dayGrowthFromYesterday = calculateGrowth(currentDayResults[0].total, previousDayResults[0].total);
+        const dayGrowthFromLastWeek = calculateGrowth(currentDayResults[0].total, sameDayLastWeekResults[0].total);
+        
+        const weekGrowthFromLastWeek = calculateGrowth(currentWeekResults[0].total, previousWeekResults[0].total);
+        const weekGrowthFromLastMonth = calculateGrowth(currentWeekResults[0].total, sameWeekLastMonthResults[0].total);
+        
+        const monthGrowthFromLastMonth = calculateGrowth(currentMonthResults[0].total, previousMonthResults[0].total);
+        const monthGrowthFromLastYear = calculateGrowth(currentMonthResults[0].total, sameMonthLastYearResults[0].total);
         
         // Liberar la conexión
         connection.release();
         
         // Devolver resultados
         res.status(200).json({
-            message: "Estadísticas de pedidos obtenidas exitosamente",
-            statistics: {
-                today: dailyResults[0].total,
-                week: weeklyResults[0].total,
-                month: monthlyResults[0].total
+            message: "Estadísticas comparativas de pedidos obtenidas exitosamente",
+            daily: {
+                today: currentDayResults[0].total,
+                yesterday: previousDayResults[0].total,
+                sameDayLastWeek: sameDayLastWeekResults[0].total,
+                growthFromYesterday: dayGrowthFromYesterday,
+                growthFromLastWeek: dayGrowthFromLastWeek
+            },
+            weekly: {
+                currentWeek: currentWeekResults[0].total,
+                previousWeek: previousWeekResults[0].total,
+                sameWeekLastMonth: sameWeekLastMonthResults[0].total,
+                growthFromLastWeek: weekGrowthFromLastWeek,
+                growthFromLastMonth: weekGrowthFromLastMonth
+            },
+            monthly: {
+                currentMonth: currentMonthResults[0].total,
+                previousMonth: previousMonthResults[0].total,
+                sameMonthLastYear: sameMonthLastYearResults[0].total,
+                growthFromLastMonth: monthGrowthFromLastMonth,
+                growthFromLastYear: monthGrowthFromLastYear
             }
         });
         
