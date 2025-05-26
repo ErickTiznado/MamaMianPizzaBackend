@@ -181,102 +181,125 @@ exports.getOrderStatistics = async (req, res) => {
 };
 
 
-exports.getAverageTicket = async (req, res) =>{
-    let connection;
-    try{
-        connection = await pool.promise().getConnection();
-        
-        const [avgToday] = await connection.query(`
-            SELECT IFNULL(AVG(total),0) as avg
-            FROM pedidos
-            WHERE DATE(fecha_pedido) = CURDATE()
-        `);
-        const [avgYesterdar] = await connection.query(`
-            SELECT IFNULL(AVG(total),0)as avg 
-            FROM pedidos
-            WHERE DATE(fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`);
+exports.getAverageTicket = async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.promise().getConnection();
 
-        const [avgSameDayLastWeek] = await connection.query(`
-            SELECT IFNULL(AVG(TOTAL), 0) as avg
-            FROM pedidos
-            WHERE DATE(fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 7 DAY)`);	
-        
-        const [avgThisWeek] = await connection.query(`
-            SELECT IFNULL(AVG(total),0) as avg
-            FROM pedidos
-            WHERE YEARWEEK(fecha_pedido, 1 ) = YEARWEEK(CURDATE(), 1)`);
-        
-        const [avgLastWeek] = await connection.query(`
-            SELECT IFNULL(AVG(total),0) as avg
-            FROM pedidos
-            WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 1 WEEK), 1)`);
+    // ——— Promedios diarios ———
+    const [rowsToday] = await connection.query(`
+      SELECT IFNULL(AVG(total),0) AS avg
+      FROM pedidos
+      WHERE DATE(fecha_pedido) = CURDATE()
+    `);
+    const avgToday = parseFloat(rowsToday[0].avg);
 
-        const [avgSameWeekLastMonth] = await connection.query(`
-            SELECT IFNULL(AVG(total),0) as avg
-            FROM pedidos
-            WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 4 WEEK), 1)`);
-        
-        const [avgThisMonth] = await connection.query(`
-            SELECT IFNULL(AVG(total),0) as avg
-            FROM pedidos
-            WHERE YEAR(fecha_pedido) = YEAR(CURDATE()) AND MONTH(fecha_pedido) = MONTH(CURDATE())`);
-        
-        const [avgLastMonth] = await connection.query(`
-            SELECT IFNULL(AVG(total),0) as avg
-            FROM pedidos
-            WHERE YEAR(fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
-            AND MONTH(fecha_pedido) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))`);
+    const [rowsYesterday] = await connection.query(`
+      SELECT IFNULL(AVG(total),0) AS avg
+      FROM pedidos
+      WHERE DATE(fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+    `);
+    const avgYesterday = parseFloat(rowsYesterday[0].avg);
 
-        const [avgSameMonthLastYear] = await connection.query(`
-            SELECT IFNULL(AVG(total),0) as avg
-            FROM pedidos
-            WHERE YEAR(fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 YEAR))
-            AND MONTH(fecha_pedido) = MONTH(CURDATE())`);
-        
-        const dailyGrowthVsYesterday = calculateGrowth(avgToday, avgYesterdar);
-        const dailyGrowthVsLastWeek = calculateGrowth(avgToday, avgSameDayLastWeek);
-        const weeklyGrowthVsLastWeek = calculateGrowth(avgThisWeek, avgLastWeek);
-        const weeklyGrowthVsLastMonth = calculateGrowth(avgThisWeek, avgSameWeekLastMonth);
-        const monthlyGrowthVsLastMonth = calculateGrowth(avgThisMonth, avgLastMonth);
-        const monthlyGrowthVsLastYear = calculateGrowth(avgThisMonth, avgSameMonthLastYear);
-        connection.release();
+    const [rowsSameDayLastWeek] = await connection.query(`
+      SELECT IFNULL(AVG(total),0) AS avg
+      FROM pedidos
+      WHERE DATE(fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+    `);
+    const avgSameDayLastWeek = parseFloat(rowsSameDayLastWeek[0].avg);
 
-        res.status(200).json({
-            message: 'Ticket Medio y Comparativas obtenidas exitosamente',
-            daily: {
-                today: parseFloat(avgToday[0].toFixed(2)),
-                yesterday: parseFloat(avgYesterdar[0].toFixed(2)),
-                sameDayLastWeek: parseFloat(avgSameDayLastWeek.toFixed(2)),
-                growthVsYesterday: dailyGrowthVsYesterday,
-                growthVsLastWeek: dailyGrowthVsLastWeek
-            },
-            weekly: {
-                thisWeek: parseFloat(avgThisWeek.toFixed(2)),
-                LastWeek: parseFloat(avgLastWeek.toFixed(2)),
-                sameWeekLastMonth: parseFloat(avgSameWeekLastMonth.toFixed(2)),
-                growthFromLastWeek: weeklyGrowthVsLastWeek,
-                growthFromLastMonth: weeklyGrowthVsLastMonth,
-                
-            },
-            monthly: {
-                thisMonth: parseFloat(avgThisMonth.toFixed(2)),
-                previousMonth: parseFloat(avgLastMonth.toFixed(2)),
-                sameMonthLastYear: parseFloat(avgSameMonthLastYear.toFixed(2)),
-                growthFromLastMonth: monthlyGrowthVsLastMonth,
-                growthFromLastYear: monthlyGrowthVsLastYear
-            }
-        })
+    // ——— Promedios semanales ———
+    const [rowsThisWeek] = await connection.query(`
+      SELECT IFNULL(AVG(total),0) AS avg
+      FROM pedidos
+      WHERE YEARWEEK(fecha_pedido,1) = YEARWEEK(CURDATE(),1)
+    `);
+    const avgThisWeek = parseFloat(rowsThisWeek[0].avg);
 
+    const [rowsLastWeek] = await connection.query(`
+      SELECT IFNULL(AVG(total),0) AS avg
+      FROM pedidos
+      WHERE YEARWEEK(fecha_pedido,1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 1 WEEK),1)
+    `);
+    const avgLastWeek = parseFloat(rowsLastWeek[0].avg);
 
-    }catch(error){
-        if(connection)await connection.rollback();
-        console.error('Error al obtener el ticket medio y comparativas:', error);
-        res.status(500).json({
-            message:"Error al obtener el ticket medio y comparativas",
-            error: error.message
-        })
-    }
-}
+    const [rowsSameWeekLastMonth] = await connection.query(`
+      SELECT IFNULL(AVG(total),0) AS avg
+      FROM pedidos
+      WHERE YEARWEEK(fecha_pedido,1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 4 WEEK),1)
+    `);
+    const avgSameWeekLastMonth = parseFloat(rowsSameWeekLastMonth[0].avg);
+
+    // ——— Promedios mensuales ———
+    const [rowsThisMonth] = await connection.query(`
+      SELECT IFNULL(AVG(total),0) AS avg
+      FROM pedidos
+      WHERE YEAR(fecha_pedido)=YEAR(CURDATE()) AND MONTH(fecha_pedido)=MONTH(CURDATE())
+    `);
+    const avgThisMonth = parseFloat(rowsThisMonth[0].avg);
+
+    const [rowsLastMonth] = await connection.query(`
+      SELECT IFNULL(AVG(total),0) AS avg
+      FROM pedidos
+      WHERE YEAR(fecha_pedido)=YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+        AND MONTH(fecha_pedido)=MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+    `);
+    const avgLastMonth = parseFloat(rowsLastMonth[0].avg);
+
+    const [rowsSameMonthLastYear] = await connection.query(`
+      SELECT IFNULL(AVG(total),0) AS avg
+      FROM pedidos
+      WHERE YEAR(fecha_pedido)=YEAR(DATE_SUB(CURDATE(), INTERVAL 1 YEAR))
+        AND MONTH(fecha_pedido)=MONTH(CURDATE())
+    `);
+    const avgSameMonthLastYear = parseFloat(rowsSameMonthLastYear[0].avg);
+
+    // ——— Cálculo de variaciones ———
+    const dailyGrowthVsYesterday  = calculateGrowth(avgToday, avgYesterday);
+    const dailyGrowthVsLastWeek   = calculateGrowth(avgToday, avgSameDayLastWeek);
+    const weeklyGrowthVsLastWeek  = calculateGrowth(avgThisWeek, avgLastWeek);
+    const weeklyGrowthVsLastMonth = calculateGrowth(avgThisWeek, avgSameWeekLastMonth);
+    const monthlyGrowthVsLastMonth= calculateGrowth(avgThisMonth, avgLastMonth);
+    const monthlyGrowthVsLastYear = calculateGrowth(avgThisMonth, avgSameMonthLastYear);
+
+    connection.release();
+
+    // ——— Respuesta final ———
+    res.status(200).json({
+      message: 'Ticket medio y comparativas obtenidas exitosamente',
+      daily: {
+        today: avgToday.toFixed(2),
+        yesterday: avgYesterday.toFixed(2),
+        sameDayLastWeek: avgSameDayLastWeek.toFixed(2),
+        growthVsYesterday: dailyGrowthVsYesterday,
+        growthVsLastWeek: dailyGrowthVsLastWeek
+      },
+      weekly: {
+        currentWeek:       avgThisWeek.toFixed(2),
+        previousWeek:      avgLastWeek.toFixed(2),
+        sameWeekLastMonth: avgSameWeekLastMonth.toFixed(2),
+        growthVsLastWeek:  weeklyGrowthVsLastWeek,
+        growthVsLastMonth: weeklyGrowthVsLastMonth
+      },
+      monthly: {
+        currentMonth:      avgThisMonth.toFixed(2),
+        previousMonth:     avgLastMonth.toFixed(2),
+        sameMonthLastYear: avgSameMonthLastYear.toFixed(2),
+        growthVsLastMonth: monthlyGrowthVsLastMonth,
+        growthVsLastYear:  monthlyGrowthVsLastYear
+      }
+    });
+
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('Error al obtener el ticket medio y comparativas:', error);
+    res.status(500).json({
+      message: 'Error al obtener el ticket medio y comparativas',
+      error: error.message
+    });
+  }
+};
+
 
 // Function to create a new order
 exports.createOrder = async (req, res) => {
