@@ -37,6 +37,18 @@ const generateProductId = (originalId) => {
     return numericId > 0 ? numericId : 1; // Asegurar que sea positivo
 };
 
+
+exports.countOrders = (req, res) => {
+    pool.query('SELECT COUNT(*) as total FROM pedidos', (err, results) => {
+    if (err) {
+        console.error('Error al contar pedidos', err);
+        return res.status(500).json({message: 'Error al contar pedidos'});
+
+    }
+    res.status(200).json({message: "Ordenes contadas exitosamente", total: results[0].total});
+});
+}
+
 // Function to create a new order
 exports.createOrder = async (req, res) => {
     // Start a transaction
