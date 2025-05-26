@@ -239,6 +239,7 @@ exports.getAverageTicket = async (req, res) =>{
         const weeklyGrowthVsLastMonth = calculateGrowth(avgThisWeek[0].avg, avgSameWeekLastMonth[0].avg);
         const monthlyGrowthVsLastMonth = calculateGrowth(avgThisMonth[0].avg, avgLastMonth[0].avg);
         const monthlyGrowthVsLastYear = calculateGrowth(avgThisMonth[0].avg, avgSameMonthLastYear[0].avg);
+        connection.release();
 
         res.status(200).json({
             message: 'Ticket Medio y Comparativas obtenidas exitosamente',
@@ -267,9 +268,13 @@ exports.getAverageTicket = async (req, res) =>{
         })
 
 
-        connection.release();
     }catch(error){
-
+        if(connection)await connection.rollback();
+        console.error('Error al obtener el ticket medio y comparativas:', error);
+        res.status(500).json({
+            message:"Error al obtener el ticket medio y comparativas",
+            error: error.message
+        })
     }
 }
 
