@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
+const { parse } = require('path');
 
 // Helper function to calculate growth percentage between two values
 const calculateGrowth = (currentValue, previousValue) => {
@@ -178,6 +179,99 @@ exports.getOrderStatistics = async (req, res) => {
         });
     }
 };
+
+
+exports.getAverageTicket = async (req, res) =>{
+    let connection;
+    try{
+        connection = await pool.promise().getConnection();
+        
+        const [avgToday] = await connection.query(`
+            SELECT IFNULL(AVG(total),0) as avg
+            FROM pedidos
+            WHERE DATE(fecha_pedido) = CURDATE()
+        `);
+        const [avgYesterdar] = await connection.query(`
+            SELECT IFNULL(AVG(total),0)as avg 
+            FROM pedidos
+            WHERE DATE(fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`);
+
+        const [avgSameDayLastWeek] = await connection.query(`
+            SELECT IFNULL(AVG(TOTAL), 0) as avg
+            FROM pedidos
+            WHERE DATE(fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 7 DAY)`);	
+        
+        const [avgThisWeek] = await connection.query(`
+            SELECT IFNULL(AVG(total),0) as avg
+            FROM pedidos
+            WHERE YEARWEEK(fecha_pedido, 1 ) = YEARWEEK(CURDATE(), 1)`);
+        
+        const [avgLastWeek] = await connection.query(`
+            SELECT IFNULL(AVG(total),0) as avg
+            FROM pedidos
+            WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 1 WEEK), 1)`);
+
+        const [avgSameWeekLastMonth] = await connection.query(`
+            SELECT IFNULL(AVG(total),0) as avg
+            FROM pedidos
+            WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 4 WEEK), 1)`);
+        
+        const [avgThisMonth] = await connection.query(`
+            SELECT IFNULL(AVG(total),0) as avg
+            FROM pedidos
+            WHERE YEAR(fecha_pedido) = YEAR(CURDATE()) AND MONTH(fecha_pedido) = MONTH(CURDATE())`);
+        
+        const [avgLastMonth] = await connection.query(`
+            SELECT IFNULL(AVG(total),0) as avg
+            FROM pedidos
+            WHERE YEAR(fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+            AND MONTH(fecha_pedido) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))`);
+
+        const [avgSameMonthLastYear] = await connection.query(`
+            SELECT IFNULL(AVG(total),0) as avg
+            FROM pedidos
+            WHERE YEAR(fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 YEAR))
+            AND MONTH(fecha_pedido) = MONTH(CURDATE())`);
+        
+        const dailyGrowthVsYesterday = calculateGrowth(avgToday[0].avg, avgYesterdar[0].avg);
+        const dailyGrowthVsLastWeek = calculateGrowth(avgToday[0].avg, avgSameDayLastWeek[0].avg);
+        const weeklyGrowthVsLastWeek = calculateGrowth(avgThisWeek[0].avg, avgLastWeek[0].avg);
+        const weeklyGrowthVsLastMonth = calculateGrowth(avgThisWeek[0].avg, avgSameWeekLastMonth[0].avg);
+        const monthlyGrowthVsLastMonth = calculateGrowth(avgThisMonth[0].avg, avgLastMonth[0].avg);
+        const monthlyGrowthVsLastYear = calculateGrowth(avgThisMonth[0].avg, avgSameMonthLastYear[0].avg);
+
+        res.status(200).json({
+            message: 'Ticket Medio y Comparativas obtenidas exitosamente',
+            daily: {
+                today: parseFloat(avgToday[0].avg.toFixed(2)),
+                yesterday: parseFloat(avgYesterdar[0].avg.toFixed(2)),
+                sameDayLastWeek: parseFloat(avgSameDayLastWeek[0].avg.toFixed(2)),
+                growthVsYesterday: dailyGrowthVsYesterday,
+                growthVsLastWeek: dailyGrowthVsLastWeek
+            },
+            weekly: {
+                thisWeek: parseFloat(avgThisWeek[0].avg.toFixed(2)),
+                LastWeek: parseFloat(avgLastWeek[0].avg.toFixed(2)),
+                sameWeekLastMonth: parseFloat(avgSameWeekLastMonth[0].avg.toFixed(2)),
+                growthFromLastWeek: weeklyGrowthVsLastWeek,
+                growthFromLastMonth: weeklyGrowthVsLastMonth,
+                
+            },
+            monthly: {
+                thisMonth: parseFloat(avgThisMonth[0].avg.toFixed(2)),
+                previousMonth: parseFloat(avgLastMonth[0].avg.toFixed(2)),
+                sameMonthLastYear: parseFloat(avgSameMonthLastYear[0].avg.toFixed(2)),
+                growthFromLastMonth: monthlyGrowthVsLastMonth,
+                growthFromLastYear: monthlyGrowthVsLastYear
+            }
+        })
+
+
+        connection.release();
+    }catch(error){
+
+    }
+}
 
 // Function to create a new order
 exports.createOrder = async (req, res) => {
