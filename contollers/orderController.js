@@ -233,35 +233,35 @@ exports.getAverageTicket = async (req, res) =>{
             WHERE YEAR(fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 YEAR))
             AND MONTH(fecha_pedido) = MONTH(CURDATE())`);
         
-        const dailyGrowthVsYesterday = calculateGrowth(avgToday[0].avg, avgYesterdar[0].avg);
-        const dailyGrowthVsLastWeek = calculateGrowth(avgToday[0].avg, avgSameDayLastWeek[0].avg);
-        const weeklyGrowthVsLastWeek = calculateGrowth(avgThisWeek[0].avg, avgLastWeek[0].avg);
-        const weeklyGrowthVsLastMonth = calculateGrowth(avgThisWeek[0].avg, avgSameWeekLastMonth[0].avg);
-        const monthlyGrowthVsLastMonth = calculateGrowth(avgThisMonth[0].avg, avgLastMonth[0].avg);
-        const monthlyGrowthVsLastYear = calculateGrowth(avgThisMonth[0].avg, avgSameMonthLastYear[0].avg);
+        const dailyGrowthVsYesterday = calculateGrowth(avgToday, avgYesterdar);
+        const dailyGrowthVsLastWeek = calculateGrowth(avgToday, avgSameDayLastWeek);
+        const weeklyGrowthVsLastWeek = calculateGrowth(avgThisWeek, avgLastWeek);
+        const weeklyGrowthVsLastMonth = calculateGrowth(avgThisWeek, avgSameWeekLastMonth);
+        const monthlyGrowthVsLastMonth = calculateGrowth(avgThisMonth, avgLastMonth);
+        const monthlyGrowthVsLastYear = calculateGrowth(avgThisMonth, avgSameMonthLastYear);
         connection.release();
 
         res.status(200).json({
             message: 'Ticket Medio y Comparativas obtenidas exitosamente',
             daily: {
-                today: parseFloat(avgToday[0].avg.toFixed(2)),
-                yesterday: parseFloat(avgYesterdar[0].avg.toFixed(2)),
-                sameDayLastWeek: parseFloat(avgSameDayLastWeek[0].avg.toFixed(2)),
+                today: parseFloat(avgToday.toFixed(2)),
+                yesterday: parseFloat(avgYesterdar.toFixed(2)),
+                sameDayLastWeek: parseFloat(avgSameDayLastWeek.toFixed(2)),
                 growthVsYesterday: dailyGrowthVsYesterday,
                 growthVsLastWeek: dailyGrowthVsLastWeek
             },
             weekly: {
-                thisWeek: parseFloat(avgThisWeek[0].avg.toFixed(2)),
-                LastWeek: parseFloat(avgLastWeek[0].avg.toFixed(2)),
-                sameWeekLastMonth: parseFloat(avgSameWeekLastMonth[0].avg.toFixed(2)),
+                thisWeek: parseFloat(avgThisWeek.toFixed(2)),
+                LastWeek: parseFloat(avgLastWeek.toFixed(2)),
+                sameWeekLastMonth: parseFloat(avgSameWeekLastMonth.toFixed(2)),
                 growthFromLastWeek: weeklyGrowthVsLastWeek,
                 growthFromLastMonth: weeklyGrowthVsLastMonth,
                 
             },
             monthly: {
-                thisMonth: parseFloat(avgThisMonth[0].avg.toFixed(2)),
-                previousMonth: parseFloat(avgLastMonth[0].avg.toFixed(2)),
-                sameMonthLastYear: parseFloat(avgSameMonthLastYear[0].avg.toFixed(2)),
+                thisMonth: parseFloat(avgThisMonth.toFixed(2)),
+                previousMonth: parseFloat(avgLastMonth.toFixed(2)),
+                sameMonthLastYear: parseFloat(avgSameMonthLastYear.toFixed(2)),
                 growthFromLastMonth: monthlyGrowthVsLastMonth,
                 growthFromLastYear: monthlyGrowthVsLastYear
             }
