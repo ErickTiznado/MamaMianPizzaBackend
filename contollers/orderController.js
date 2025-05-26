@@ -244,8 +244,8 @@ exports.getAverageTicket = async (req, res) =>{
         res.status(200).json({
             message: 'Ticket Medio y Comparativas obtenidas exitosamente',
             daily: {
-                today: parseFloat(avgToday.toFixed(2)),
-                yesterday: parseFloat(avgYesterdar.toFixed(2)),
+                today: parseFloat(avgToday[0].toFixed(2)),
+                yesterday: parseFloat(avgYesterdar[0].toFixed(2)),
                 sameDayLastWeek: parseFloat(avgSameDayLastWeek.toFixed(2)),
                 growthVsYesterday: dailyGrowthVsYesterday,
                 growthVsLastWeek: dailyGrowthVsLastWeek
