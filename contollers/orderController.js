@@ -1203,3 +1203,22 @@ exports.checkOrderDetails = async (req, res) => {
         }
     }
 };
+
+exports.metodo_entrega = async (req, res) => {
+    pool.query('SELECT * FROM detalle_pedidos', (err, results) => {
+        if(err){
+            console.log('Error al obtener los detalles de los pedidos', err);
+            res.status(500).json({
+                message:'Algo salio mal al obtener los detalles de los pedidos',
+                error: err.message
+            })
+        }
+        
+            else{
+                res.status(200).json({
+                    message: 'datos obtenidos exitosamente',
+                    details: results
+                })
+            }
+    })
+}
