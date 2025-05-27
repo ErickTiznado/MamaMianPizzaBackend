@@ -13,6 +13,7 @@ router.put('/orders/:id/status', orderController.updateOrderStatus);
 router.get('/orders/count', orderController.countOrders);
 router.get('/statistics', orderController.getOrderStatistics);
 router.get('/statistics/tickets', orderController.getAverageTicket);
+router.get('/statistics/averages', orderController.getOrderAverages);
 // Ruta para reparar pedidos sin detalles
 router.post('/orders/:id_pedido/repair', orderController.checkOrderDetails);
 

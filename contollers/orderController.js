@@ -300,6 +300,256 @@ exports.getAverageTicket = async (req, res) => {
   }
 };
 
+// Función para obtener promedios de pedidos por intervalos de tiempo
+exports.getOrderAverages = async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.promise().getConnection();
+
+    // ---- Promedio de pedidos por hora (últimas 24 horas) ----
+    const [hourlyAvgToday] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_hora), 0) as promedio
+      FROM (
+        SELECT 
+          HOUR(fecha_pedido) as hora,
+          COUNT(*) as pedidos_por_hora
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        GROUP BY HOUR(fecha_pedido)
+      ) as conteo_por_hora
+    `);
+    
+    const [hourlyAvgYesterday] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_hora), 0) as promedio
+      FROM (
+        SELECT 
+          HOUR(fecha_pedido) as hora,
+          COUNT(*) as pedidos_por_hora
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_SUB(DATE_SUB(NOW(), INTERVAL 24 HOUR), INTERVAL 24 HOUR)
+          AND fecha_pedido < DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        GROUP BY HOUR(fecha_pedido)
+      ) as conteo_por_hora
+    `);
+
+    const [hourlyAvgLastWeek] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_hora), 0) as promedio
+      FROM (
+        SELECT 
+          HOUR(fecha_pedido) as hora,
+          COUNT(*) as pedidos_por_hora
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+          AND fecha_pedido < DATE_SUB(NOW(), INTERVAL 6 DAY)
+        GROUP BY HOUR(fecha_pedido)
+      ) as conteo_por_hora
+    `);
+
+    // ---- Promedio de pedidos por día ----
+    const [dailyAvgThisWeek] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_dia), 0) as promedio
+      FROM (
+        SELECT 
+          DATE(fecha_pedido) as dia,
+          COUNT(*) as pedidos_por_dia
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
+        GROUP BY DATE(fecha_pedido)
+      ) as conteo_por_dia
+    `);
+
+    const [dailyAvgLastWeek] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_dia), 0) as promedio
+      FROM (
+        SELECT 
+          DATE(fecha_pedido) as dia,
+          COUNT(*) as pedidos_por_dia
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_SUB(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 7 DAY)
+          AND fecha_pedido < DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
+        GROUP BY DATE(fecha_pedido)
+      ) as conteo_por_dia
+    `);
+
+    const [dailyAvgLastMonth] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_dia), 0) as promedio
+      FROM (
+        SELECT 
+          DATE(fecha_pedido) as dia,
+          COUNT(*) as pedidos_por_dia
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_SUB(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 30 DAY)
+          AND fecha_pedido < DATE_SUB(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 23 DAY)
+        GROUP BY DATE(fecha_pedido)
+      ) as conteo_por_dia
+    `);
+
+    // ---- Promedio de pedidos por semana ----
+    const [weeklyAvgThisMonth] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_semana), 0) as promedio
+      FROM (
+        SELECT 
+          YEARWEEK(fecha_pedido, 1) as semana,
+          COUNT(*) as pedidos_por_semana
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_SUB(CURDATE(), INTERVAL DAY(CURDATE())-1 DAY)
+        GROUP BY YEARWEEK(fecha_pedido, 1)
+      ) as conteo_por_semana
+    `);
+
+    const [weeklyAvgLastMonth] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_semana), 0) as promedio
+      FROM (
+        SELECT 
+          YEARWEEK(fecha_pedido, 1) as semana,
+          COUNT(*) as pedidos_por_semana
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_SUB(DATE_SUB(CURDATE(), INTERVAL DAY(CURDATE())-1 DAY), INTERVAL 1 MONTH)
+          AND fecha_pedido < DATE_SUB(CURDATE(), INTERVAL DAY(CURDATE())-1 DAY)
+        GROUP BY YEARWEEK(fecha_pedido, 1)
+      ) as conteo_por_semana
+    `);
+
+    const [weeklyAvgLastYear] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_semana), 0) as promedio
+      FROM (
+        SELECT 
+          YEARWEEK(fecha_pedido, 1) as semana,
+          COUNT(*) as pedidos_por_semana
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_SUB(DATE_SUB(CURDATE(), INTERVAL DAY(CURDATE())-1 DAY), INTERVAL 1 YEAR)
+          AND fecha_pedido < DATE_SUB(DATE_SUB(CURDATE(), INTERVAL DAY(CURDATE())-1 DAY), INTERVAL 11 MONTH)
+        GROUP BY YEARWEEK(fecha_pedido, 1)
+      ) as conteo_por_semana
+    `);
+
+    // ---- Promedio de pedidos por mes ----
+    const [monthlyAvgThisYear] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_mes), 0) as promedio
+      FROM (
+        SELECT 
+          CONCAT(YEAR(fecha_pedido), '-', MONTH(fecha_pedido)) as mes,
+          COUNT(*) as pedidos_por_mes
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_FORMAT(CURDATE(), '%Y-01-01')
+        GROUP BY YEAR(fecha_pedido), MONTH(fecha_pedido)
+      ) as conteo_por_mes
+    `);
+
+    const [monthlyAvgLastYear] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_mes), 0) as promedio
+      FROM (
+        SELECT 
+          CONCAT(YEAR(fecha_pedido), '-', MONTH(fecha_pedido)) as mes,
+          COUNT(*) as pedidos_por_mes
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-01-01'), INTERVAL 1 YEAR)
+          AND fecha_pedido < DATE_FORMAT(CURDATE(), '%Y-01-01')
+        GROUP BY YEAR(fecha_pedido), MONTH(fecha_pedido)
+      ) as conteo_por_mes
+    `);
+
+    const [monthlyAvgTwoYearsAgo] = await connection.query(`
+      SELECT 
+        IFNULL(AVG(pedidos_por_mes), 0) as promedio
+      FROM (
+        SELECT 
+          CONCAT(YEAR(fecha_pedido), '-', MONTH(fecha_pedido)) as mes,
+          COUNT(*) as pedidos_por_mes
+        FROM pedidos
+        WHERE fecha_pedido >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-01-01'), INTERVAL 2 YEAR)
+          AND fecha_pedido < DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-01-01'), INTERVAL 1 YEAR)
+        GROUP BY YEAR(fecha_pedido), MONTH(fecha_pedido)
+      ) as conteo_por_mes
+    `);
+
+    // Convertir resultados de queries a números y redondear a 2 decimales
+    const avgHourlyToday = parseFloat(hourlyAvgToday[0].promedio.toFixed(2));
+    const avgHourlyYesterday = parseFloat(hourlyAvgYesterday[0].promedio.toFixed(2));
+    const avgHourlyLastWeek = parseFloat(hourlyAvgLastWeek[0].promedio.toFixed(2));
+
+    const avgDailyThisWeek = parseFloat(dailyAvgThisWeek[0].promedio.toFixed(2));
+    const avgDailyLastWeek = parseFloat(dailyAvgLastWeek[0].promedio.toFixed(2));
+    const avgDailyLastMonth = parseFloat(dailyAvgLastMonth[0].promedio.toFixed(2));
+
+    const avgWeeklyThisMonth = parseFloat(weeklyAvgThisMonth[0].promedio.toFixed(2));
+    const avgWeeklyLastMonth = parseFloat(weeklyAvgLastMonth[0].promedio.toFixed(2));
+    const avgWeeklyLastYear = parseFloat(weeklyAvgLastYear[0].promedio.toFixed(2));
+
+    const avgMonthlyThisYear = parseFloat(monthlyAvgThisYear[0].promedio.toFixed(2));
+    const avgMonthlyLastYear = parseFloat(monthlyAvgLastYear[0].promedio.toFixed(2));
+    const avgMonthlyTwoYearsAgo = parseFloat(monthlyAvgTwoYearsAgo[0].promedio.toFixed(2));
+
+    // Calcular porcentajes de crecimiento
+    const hourlyGrowthFromYesterday = calculateGrowth(avgHourlyToday, avgHourlyYesterday);
+    const hourlyGrowthFromLastWeek = calculateGrowth(avgHourlyToday, avgHourlyLastWeek);
+
+    const dailyGrowthFromLastWeek = calculateGrowth(avgDailyThisWeek, avgDailyLastWeek);
+    const dailyGrowthFromLastMonth = calculateGrowth(avgDailyThisWeek, avgDailyLastMonth);
+
+    const weeklyGrowthFromLastMonth = calculateGrowth(avgWeeklyThisMonth, avgWeeklyLastMonth);
+    const weeklyGrowthFromLastYear = calculateGrowth(avgWeeklyThisMonth, avgWeeklyLastYear);
+
+    const monthlyGrowthFromLastYear = calculateGrowth(avgMonthlyThisYear, avgMonthlyLastYear);
+    const monthlyGrowthFromTwoYearsAgo = calculateGrowth(avgMonthlyThisYear, avgMonthlyTwoYearsAgo);
+
+    // Liberar la conexión
+    connection.release();
+
+    // Devolver resultados
+    res.status(200).json({
+      message: "Promedios de pedidos por intervalos obtenidos exitosamente",
+      hourly: {
+        current24Hours: avgHourlyToday,
+        previous24Hours: avgHourlyYesterday,
+        sameDay24HoursLastWeek: avgHourlyLastWeek,
+        growthFromYesterday: hourlyGrowthFromYesterday,
+        growthFromLastWeek: hourlyGrowthFromLastWeek
+      },
+      daily: {
+        currentWeekAvg: avgDailyThisWeek,
+        previousWeekAvg: avgDailyLastWeek,
+        sameWeekLastMonthAvg: avgDailyLastMonth,
+        growthFromLastWeek: dailyGrowthFromLastWeek,
+        growthFromLastMonth: dailyGrowthFromLastMonth
+      },
+      weekly: {
+        currentMonthAvg: avgWeeklyThisMonth,
+        previousMonthAvg: avgWeeklyLastMonth,
+        sameMonthLastYearAvg: avgWeeklyLastYear,
+        growthFromLastMonth: weeklyGrowthFromLastMonth,
+        growthFromLastYear: weeklyGrowthFromLastYear
+      },
+      monthly: {
+        currentYearAvg: avgMonthlyThisYear,
+        previousYearAvg: avgMonthlyLastYear,
+        twoYearsAgoAvg: avgMonthlyTwoYearsAgo,
+        growthFromLastYear: monthlyGrowthFromLastYear,
+        growthFromTwoYearsAgo: monthlyGrowthFromTwoYearsAgo
+      }
+    });
+
+  } catch (error) {
+    if (connection) connection.release();
+    console.error('Error al obtener promedios de pedidos:', error);
+    res.status(500).json({
+      message: 'Error al obtener promedios de pedidos por intervalos',
+      error: error.message
+    });
+  }
+};
+
 
 // Function to create a new order
 exports.createOrder = async (req, res) => {
