@@ -475,24 +475,22 @@ exports.getOrderAverages = async (req, res) => {
           AND fecha_pedido < DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-01-01'), INTERVAL 1 YEAR)
         GROUP BY YEAR(fecha_pedido), MONTH(fecha_pedido)
       ) as conteo_por_mes
-    `);
+    `);    // Convertir resultados de queries a números y redondear a 2 decimales
+    const avgHourlyToday = parseFloat(hourlyAvgToday[0].promedio || 0);
+    const avgHourlyYesterday = parseFloat(hourlyAvgYesterday[0].promedio || 0);
+    const avgHourlyLastWeek = parseFloat(hourlyAvgLastWeek[0].promedio || 0);
 
-    // Convertir resultados de queries a números y redondear a 2 decimales
-    const avgHourlyToday = parseFloat(hourlyAvgToday[0].promedio.toFixed(2));
-    const avgHourlyYesterday = parseFloat(hourlyAvgYesterday[0].promedio.toFixed(2));
-    const avgHourlyLastWeek = parseFloat(hourlyAvgLastWeek[0].promedio.toFixed(2));
+    const avgDailyThisWeek = parseFloat(dailyAvgThisWeek[0].promedio || 0);
+    const avgDailyLastWeek = parseFloat(dailyAvgLastWeek[0].promedio || 0);
+    const avgDailyLastMonth = parseFloat(dailyAvgLastMonth[0].promedio || 0);
 
-    const avgDailyThisWeek = parseFloat(dailyAvgThisWeek[0].promedio.toFixed(2));
-    const avgDailyLastWeek = parseFloat(dailyAvgLastWeek[0].promedio.toFixed(2));
-    const avgDailyLastMonth = parseFloat(dailyAvgLastMonth[0].promedio.toFixed(2));
+    const avgWeeklyThisMonth = parseFloat(weeklyAvgThisMonth[0].promedio || 0);
+    const avgWeeklyLastMonth = parseFloat(weeklyAvgLastMonth[0].promedio || 0);
+    const avgWeeklyLastYear = parseFloat(weeklyAvgLastYear[0].promedio || 0);
 
-    const avgWeeklyThisMonth = parseFloat(weeklyAvgThisMonth[0].promedio.toFixed(2));
-    const avgWeeklyLastMonth = parseFloat(weeklyAvgLastMonth[0].promedio.toFixed(2));
-    const avgWeeklyLastYear = parseFloat(weeklyAvgLastYear[0].promedio.toFixed(2));
-
-    const avgMonthlyThisYear = parseFloat(monthlyAvgThisYear[0].promedio.toFixed(2));
-    const avgMonthlyLastYear = parseFloat(monthlyAvgLastYear[0].promedio.toFixed(2));
-    const avgMonthlyTwoYearsAgo = parseFloat(monthlyAvgTwoYearsAgo[0].promedio.toFixed(2));
+    const avgMonthlyThisYear = parseFloat(monthlyAvgThisYear[0].promedio || 0);
+    const avgMonthlyLastYear = parseFloat(monthlyAvgLastYear[0].promedio || 0);
+    const avgMonthlyTwoYearsAgo = parseFloat(monthlyAvgTwoYearsAgo[0].promedio || 0);
 
     // Calcular porcentajes de crecimiento
     const hourlyGrowthFromYesterday = calculateGrowth(avgHourlyToday, avgHourlyYesterday);
@@ -508,36 +506,34 @@ exports.getOrderAverages = async (req, res) => {
     const monthlyGrowthFromTwoYearsAgo = calculateGrowth(avgMonthlyThisYear, avgMonthlyTwoYearsAgo);
 
     // Liberar la conexión
-    connection.release();
-
-    // Devolver resultados
+    connection.release();    // Devolver resultados
     res.status(200).json({
       message: "Promedios de pedidos por intervalos obtenidos exitosamente",
       hourly: {
-        current24Hours: avgHourlyToday,
-        previous24Hours: avgHourlyYesterday,
-        sameDay24HoursLastWeek: avgHourlyLastWeek,
+        current24Hours: avgHourlyToday.toFixed(2),
+        previous24Hours: avgHourlyYesterday.toFixed(2),
+        sameDay24HoursLastWeek: avgHourlyLastWeek.toFixed(2),
         growthFromYesterday: hourlyGrowthFromYesterday,
         growthFromLastWeek: hourlyGrowthFromLastWeek
       },
       daily: {
-        currentWeekAvg: avgDailyThisWeek,
-        previousWeekAvg: avgDailyLastWeek,
-        sameWeekLastMonthAvg: avgDailyLastMonth,
+        currentWeekAvg: avgDailyThisWeek.toFixed(2),
+        previousWeekAvg: avgDailyLastWeek.toFixed(2),
+        sameWeekLastMonthAvg: avgDailyLastMonth.toFixed(2),
         growthFromLastWeek: dailyGrowthFromLastWeek,
         growthFromLastMonth: dailyGrowthFromLastMonth
       },
       weekly: {
-        currentMonthAvg: avgWeeklyThisMonth,
-        previousMonthAvg: avgWeeklyLastMonth,
-        sameMonthLastYearAvg: avgWeeklyLastYear,
+        currentMonthAvg: avgWeeklyThisMonth.toFixed(2),
+        previousMonthAvg: avgWeeklyLastMonth.toFixed(2),
+        sameMonthLastYearAvg: avgWeeklyLastYear.toFixed(2),
         growthFromLastMonth: weeklyGrowthFromLastMonth,
         growthFromLastYear: weeklyGrowthFromLastYear
       },
       monthly: {
-        currentYearAvg: avgMonthlyThisYear,
-        previousYearAvg: avgMonthlyLastYear,
-        twoYearsAgoAvg: avgMonthlyTwoYearsAgo,
+        currentYearAvg: avgMonthlyThisYear.toFixed(2),
+        previousYearAvg: avgMonthlyLastYear.toFixed(2),
+        twoYearsAgoAvg: avgMonthlyTwoYearsAgo.toFixed(2),
         growthFromLastYear: monthlyGrowthFromLastYear,
         growthFromTwoYearsAgo: monthlyGrowthFromTwoYearsAgo
       }
