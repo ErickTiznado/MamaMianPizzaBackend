@@ -438,7 +438,8 @@ exports.getOrderAverages = async (req, res) => {
         IFNULL(AVG(pedidos_por_mes), 0) as promedio
       FROM (
         SELECT 
-          CONCAT(YEAR(fecha_pedido), '-', MONTH(fecha_pedido)) as mes,
+          YEAR(fecha_pedido) as anio,
+          MONTH(fecha_pedido) as mes,
           COUNT(*) as pedidos_por_mes
         FROM pedidos
         WHERE fecha_pedido >= DATE_FORMAT(CURDATE(), '%Y-01-01')
@@ -451,7 +452,8 @@ exports.getOrderAverages = async (req, res) => {
         IFNULL(AVG(pedidos_por_mes), 0) as promedio
       FROM (
         SELECT 
-          CONCAT(YEAR(fecha_pedido), '-', MONTH(fecha_pedido)) as mes,
+          YEAR(fecha_pedido) as anio,
+          MONTH(fecha_pedido) as mes,
           COUNT(*) as pedidos_por_mes
         FROM pedidos
         WHERE fecha_pedido >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-01-01'), INTERVAL 1 YEAR)
@@ -465,7 +467,8 @@ exports.getOrderAverages = async (req, res) => {
         IFNULL(AVG(pedidos_por_mes), 0) as promedio
       FROM (
         SELECT 
-          CONCAT(YEAR(fecha_pedido), '-', MONTH(fecha_pedido)) as mes,
+          YEAR(fecha_pedido) as anio,
+          MONTH(fecha_pedido) as mes,
           COUNT(*) as pedidos_por_mes
         FROM pedidos
         WHERE fecha_pedido >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-01-01'), INTERVAL 2 YEAR)
@@ -539,14 +542,14 @@ exports.getOrderAverages = async (req, res) => {
         growthFromTwoYearsAgo: monthlyGrowthFromTwoYearsAgo
       }
     });
-
   } catch (error) {
-    if (connection) connection.release();
     console.error('Error al obtener promedios de pedidos:', error);
     res.status(500).json({
       message: 'Error al obtener promedios de pedidos por intervalos',
       error: error.message
     });
+  } finally {
+    if (connection) connection.release();
   }
 };
 
