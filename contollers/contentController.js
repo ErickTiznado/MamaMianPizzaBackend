@@ -62,53 +62,85 @@ const getCategoryId = (categoryName, callback) => {
 };
 
 exports.submitContent = (req, res) => {
-    upload(req, res, function(err) {
-        if (err instanceof multer.MulterError) {
-            return res.status(400).json({ message: 'Error al subir la imagen: ' + err.message });
-        } else if (err) {
-            return res.status(500).json({ message: 'Error al subir la imagen: ' + err.message });
-        }
-        
-        const { titulo, descripcion, porciones, categoria, sesion } = req.body;
-        const activo = req.body.activo === 'true' || req.body.activo === true;
-        const actDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        
-        // Default precio if not provided
-        const precio = req.body.precio || 0;
-        
-        // Get complete URL path for image
-        const imagenPath = req.file ? `${SERVER_BASE_URL}/uploads/${req.file.filename}` : null;
-        
-        try {
-            if (!titulo || !descripcion || !porciones || !sesion || !categoria) {
-                return res.status(400).json({ message: 'Faltan datos requeridos' });
-            }
-            
-            getCategoryId(categoria, (err, idcategoria) => {
-                if (err) {
-                    console.error('Error al obtener/crear la categoría', err);
-                    return res.status(500).json({ message: 'Error al procesar la categoría' });
-                }
-                console.log('ID de categoría:', idcategoria);
-                pool.query(
-                    'INSERT INTO productos (titulo, descripcion, precio, porciones, seccion, id_categoria, activo, imagen, fecha_creacion, fecha_actualizacion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    [titulo, descripcion, precio, porciones, sesion, idcategoria, activo, imagenPath, actualDate, actDate],
-                    (err, results) => {
-                        if (err) {
-                            console.error('Error al crear el producto', err);
-                            return res.status(500).json({ message: 'Error al crear el producto' });
-                        }
+  upload(req, res, function(err) {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ message: 'Error al subir la imagen: ' + err.message });
+    } else if (err) {
+      return res.status(500).json({ message: 'Error al subir la imagen: ' + err.message });
+    }
 
-                        res.status(201).json({ message: 'Producto creado exitosamente', id_producto: results.insertId });
-                    }
-                );
+    const { titulo, descripcion, porciones, categoria, sesion, precios } = req.body;
+    // precios debe venir como objeto: { "1": "6.00", "2": "8.00", ... }
+    const preciosObj = typeof precios === 'string'
+      ? JSON.parse(precios)
+      : precios;
+
+    if (!titulo || !descripcion || !porciones || !sesion || !categoria || !preciosObj) {
+      return res.status(400).json({ message: 'Faltan datos requeridos' });
+    }
+
+    const activo = req.body.activo === 'true' || req.body.activo === true;
+    const imagenPath = req.file
+      ? `${SERVER_BASE_URL}/uploads/${req.file.filename}`
+      : null;
+
+    getCategoryId(categoria, (err, idcategoria) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'Error al procesar la categoría' });
+      }
+
+      // 1) Creamos el producto
+      pool.query(
+        `INSERT INTO productos
+           (titulo, descripcion, porciones, seccion, id_categoria, activo, imagen, fecha_creacion, fecha_actualizacion)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [titulo, descripcion, porciones, sesion, idcategoria, activo, imagenPath, actualDate, actualDate],
+        (err, result) => {
+          if (err) {
+            console.error(err);
+            return res.status(500).json({ message: 'Error al crear el producto' });
+          }
+          const pizzaId = result.insertId;
+
+          // 2) Insertamos los precios para cada tamaño
+          const entries = Object.entries(preciosObj);
+          let pendientes = entries.length, fallo = false;
+
+          entries.forEach(([tamanoId, precio]) => {
+            pool.query(
+              `INSERT INTO precios (pizza_id, tamano_id, precio) VALUES (?, ?, ?)`,
+              [pizzaId, tamanoId, parseFloat(precio)],
+              err => {
+                if (err && !fallo) {
+                  fallo = true;
+                  console.error('Error al insertar precio', err);
+                  return res.status(500).json({ message: 'Error al guardar precios' });
+                }
+                pendientes--;
+                if (pendientes === 0 && !fallo) {
+                  res.status(201).json({
+                    message: 'Producto y precios creados exitosamente',
+                    id_producto: pizzaId
+                  });
+                }
+              }
+            );
+          });
+
+          // Si no hay tamaños (no debería pasar), devolvemos ya:
+          if (entries.length === 0) {
+            res.status(201).json({
+              message: 'Producto creado sin precios (ajusta tu formulario)',
+              id_producto: pizzaId
             });
-        } catch (error) {
-            console.error('Error en el servidor', error);
-            res.status(500).json({ message: 'Error en el servidor' });
+          }
         }
+      );
     });
+  });
 };
+
 
 exports.getLasMasPopulares = (req, res) => {
     pool.query('SELECT * FROM productos WHERE seccion = "Las más populares" ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {
@@ -132,16 +164,48 @@ exports.getRecomendacionDeLacasa = (req, res) => {
     })
     }
 
-
-    exports.getMenu = (req, res) => {
-        pool.query('SELECT * FROM productos ORDER BY fecha_creacion DESC', (err, results) => {
-            if(err){
-                console.error('Error al obtener productos', err);
-                return res.status(500).json({ message: 'Error al obtener productos' });
-            }
-            res.status(200).json({message: 'Productos obtenidos exitosamente', productos: results });            
-        })
+exports.getMenu = (req, res) => {
+  const sql = `
+    SELECT 
+      p.id_producto,
+      p.titulo,
+      p.descripcion,
+      t.id_tamano,
+      t.nombre    AS tamano,
+      t.indice    AS orden_tamano,
+      pr.precio
+    FROM productos p
+    JOIN precios pr ON p.id_producto = pr.pizza_id
+    JOIN tamanos t  ON pr.tamano_id   = t.id_tamano
+    ORDER BY p.id_producto, t.indice;
+  `;
+  pool.query(sql, (err, rows) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: 'Error al obtener el menú' });
     }
+    // Agrupamos por pizza
+    const mapa = {};
+    rows.forEach(r => {
+      if (!mapa[r.id_producto]) {
+        mapa[r.id_producto] = {
+          id: r.id_producto,
+          titulo: r.titulo,
+          descripcion: r.descripcion,
+          opciones: []
+        };
+      }
+      mapa[r.id_producto].opciones.push({
+        tamanoId: r.id_tamano,
+        nombre:   r.tamano,
+        precio:   parseFloat(r.precio)
+      });
+    });
+    const menu = Object.values(mapa);
+    res.status(200).json({ message: 'Menú cargado', menu });
+  });
+};
+
 
 
     exports.DeleteContent = (req, res) => {
@@ -168,43 +232,85 @@ exports.getRecomendacionDeLacasa = (req, res) => {
 
 
     exports.updateContent = (req, res) => {
-        const { id_producto } = req.params;
-        const { titulo, descripcion, porciones, categoria, sesion } = req.body;
-        const activo = req.body.activo === 'true' || req.body.activo === true;
-        const actDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        
-        // Default precio if not provided
-        const precio = req.body.precio || 0;
-        
-        // Get complete URL path for image
-        const imagenPath = req.file ? `${SERVER_BASE_URL}/uploads/${req.file.filename}` : null;
+  upload(req, res, function(err) {
+    if (err) return res.status(400).json({ message: err.message });
 
-        try {
-            if (!titulo || !descripcion || !porciones || !sesion || !categoria) {
-                return res.status(400).json({ message: 'Faltan datos requeridos' });
-            }
-            
-            getCategoryId(categoria, (err, idcategoria) => {
-                if (err) {
-                    console.error('Error al obtener/crear la categoría', err);
-                    return res.status(500).json({ message: 'Error al procesar la categoría' });
-                }
-                console.log('ID de categoría:', idcategoria);
-                pool.query(
-                    'UPDATE productos SET titulo = ?, descripcion = ?, precio = ?, porciones = ?, seccion = ?, id_categoria = ?, activo = ?, imagen = ?, fecha_actualizacion = ? WHERE id_producto = ?',
-                    [titulo, descripcion, precio, porciones, sesion, idcategoria, activo, imagenPath, actDate, id_producto],
-                    (err, results) => {
-                        if (err) {
-                            console.error('Error al actualizar el producto', err);
-                            return res.status(500).json({ message: 'Error al actualizar el producto' });
-                        }
+    const { id_producto } = req.params;
+    const { titulo, descripcion, porciones, categoria, sesion, precios } = req.body;
+    const preciosObj = typeof precios === 'string'
+      ? JSON.parse(precios)
+      : precios;
 
-                        res.status(200).json({ message: 'Producto actualizado exitosamente', id_producto: id_producto });
-                    }
-                );
-            });
-        } catch (error) {
-            console.error('Error en el servidor', error);
-            res.status(500).json({ message: 'Error en el servidor' });
-        }
+    if (!titulo || !descripcion || !porciones || !sesion || !categoria || !preciosObj) {
+      return res.status(400).json({ message: 'Faltan datos requeridos' });
     }
+
+    const activo = req.body.activo === 'true' || req.body.activo === true;
+    const imagenPath = req.file
+      ? `${SERVER_BASE_URL}/uploads/${req.file.filename}`
+      : null;
+    const actDate = new Date().toISOString().slice(0,19).replace('T',' ');
+
+    getCategoryId(categoria, (err, idcategoria) => {
+      if (err) return res.status(500).json({ message: 'Error al procesar la categoría' });
+
+      // 1) Actualizar datos básicos de la pizza
+      pool.query(
+        `UPDATE productos SET
+           titulo = ?, descripcion = ?, porciones = ?, seccion = ?, id_categoria = ?, activo = ?, imagen = COALESCE(?, imagen), fecha_actualizacion = ?
+         WHERE id_producto = ?`,
+        [titulo, descripcion, porciones, sesion, idcategoria, activo, imagenPath, actDate, id_producto],
+        err => {
+          if (err) {
+            console.error(err);
+            return res.status(500).json({ message: 'Error al actualizar el producto' });
+          }
+
+          // 2) Borrar precios antiguos
+          pool.query(
+            `DELETE FROM precios WHERE pizza_id = ?`,
+            [id_producto],
+            err => {
+              if (err) {
+                console.error(err);
+                return res.status(500).json({ message: 'Error al limpiar precios antiguos' });
+              }
+
+              // 3) Insertar precios nuevos
+              const entries = Object.entries(preciosObj);
+              let pendientes = entries.length, fallo = false;
+
+              entries.forEach(([tamanoId, precio]) => {
+                pool.query(
+                  `INSERT INTO precios (pizza_id, tamano_id, precio) VALUES (?, ?, ?)`,
+                  [id_producto, tamanoId, parseFloat(precio)],
+                  err => {
+                    if (err && !fallo) {
+                      fallo = true;
+                      console.error(err);
+                      return res.status(500).json({ message: 'Error al guardar nuevos precios' });
+                    }
+                    pendientes--;
+                    if (pendientes === 0 && !fallo) {
+                      res.status(200).json({
+                        message: 'Producto y precios actualizados exitosamente',
+                        id_producto
+                      });
+                    }
+                  }
+                );
+              });
+
+              if (entries.length === 0) {
+                res.status(200).json({
+                  message: 'Producto actualizado sin precios (verifica tu formulario)',
+                  id_producto
+                });
+              }
+            }
+          );
+        }
+      );
+    });
+  });
+};
