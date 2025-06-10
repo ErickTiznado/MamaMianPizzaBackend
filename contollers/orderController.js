@@ -574,7 +574,7 @@ exports.createOrder = async (req, res) => {
 
         // Validate required fields
         if (!tipo_cliente || !cliente || !direccion || !metodo_pago || !productos || !total) {
-            return res.status(400).json({ message: 'Faltan datos requeridos para el pedido', error: error.message });
+            return res.status(400).json({ message: 'Faltan datos requeridos para el pedido' });
         }
 
         if (!Array.isArray(productos) || productos.length === 0) {
