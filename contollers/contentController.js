@@ -170,6 +170,8 @@ exports.getMenu = (req, res) => {
       p.id_producto,
       p.titulo,
       p.descripcion,
+      p.imagen,
+      p.activo,
       t.id_tamano,
       t.nombre    AS tamano,
       t.indice    AS orden_tamano,
