@@ -5,3 +5,6 @@ const tamanosController = require('../contollers/tamanosController');
 
 
 router.get('/tamanos', tamanosController.getAllSizes);
+
+
+module.exports = router;
