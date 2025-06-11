@@ -6,7 +6,7 @@ const multer = require('multer');
 const actualDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
 // Server base URL
-const SERVER_BASE_URL = 'https://server.tiznadodev.com';
+const SERVER_BASE_URL = 'https://api.mamamianpizza.com';
 
 // Configure multer for image uploads
 const storage = multer.diskStorage({
