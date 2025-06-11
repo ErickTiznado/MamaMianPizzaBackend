@@ -194,6 +194,9 @@ exports.getMenu = (req, res) => {
           id: r.id_producto,
           titulo: r.titulo,
           descripcion: r.descripcion,
+          imagen: r.imagen,
+          activo: r.activo,
+
           opciones: []
         };
       }
