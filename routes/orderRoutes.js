@@ -15,7 +15,9 @@ router.get('/statistics', orderController.getOrderStatistics);
 router.get('/statistics/tickets', orderController.getAverageTicket);
 router.get('/statistics/averages', orderController.getOrderAverages);
 router.get('/statistics/income', orderController.getNetIncomeStatistics);
+router.get('/statistics/units', orderController.getUnitsSoldStatistics);
 router.get('/income', orderController.getNetIncome);
+router.get('/units', orderController.getUnitsSold);
 router.get('/satistics/entregas', orderController.metodo_entrega);
 // Ruta para reparar pedidos sin detalles
 router.post('/orders/:id_pedido/repair', orderController.checkOrderDetails);

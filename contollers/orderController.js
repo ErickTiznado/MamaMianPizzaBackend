@@ -1399,3 +1399,193 @@ exports.getNetIncome = async (req, res) => {
         });
     }
 };
+
+// Function to get units sold statistics by time period with comparative analysis
+exports.getUnitsSoldStatistics = async (req, res) => {
+    try {
+        const connection = await pool.promise().getConnection();
+        
+        // ESTADÍSTICAS DE UNIDADES VENDIDAS DEL DÍA ACTUAL Y COMPARATIVA
+        // Query para calcular unidades vendidas de hoy
+        const [currentDayResults] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE DATE(p.fecha_pedido) = CURDATE()
+        `);
+        
+        // Query para calcular unidades vendidas de ayer
+        const [previousDayResults] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE DATE(p.fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+        `);
+        
+        // Query para calcular unidades vendidas del mismo día la semana pasada
+        const [sameDayLastWeekResults] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE DATE(p.fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        `);
+        
+        // ESTADÍSTICAS DE UNIDADES VENDIDAS DE LA SEMANA ACTUAL Y COMPARATIVA
+        // Query para calcular unidades vendidas de la semana actual (lunes a domingo)
+        const [currentWeekResults] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)
+        `);
+        
+        // Query para calcular unidades vendidas de la semana anterior
+        const [previousWeekResults] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 1 WEEK), 1)
+        `);
+        
+        // Query para calcular unidades vendidas de la misma semana el mes pasado
+        const [sameWeekLastMonthResults] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 4 WEEK), 1)
+        `);
+        
+        // ESTADÍSTICAS DE UNIDADES VENDIDAS DEL MES ACTUAL Y COMPARATIVA
+        // Query para calcular unidades vendidas del mes actual
+        const [currentMonthResults] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE()) AND MONTH(p.fecha_pedido) = MONTH(CURDATE())
+        `);
+        
+        // Query para calcular unidades vendidas del mes anterior
+        const [previousMonthResults] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE YEAR(p.fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) 
+            AND MONTH(p.fecha_pedido) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+        `);
+        
+        // Query para calcular unidades vendidas del mismo mes el año pasado
+        const [sameMonthLastYearResults] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE YEAR(p.fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 YEAR)) 
+            AND MONTH(p.fecha_pedido) = MONTH(CURDATE())
+        `);
+        
+        // Calcular porcentajes de crecimiento de unidades vendidas
+        const dayUnitsGrowthFromYesterday = calculateGrowth(currentDayResults[0].total_units, previousDayResults[0].total_units);
+        const dayUnitsGrowthFromLastWeek = calculateGrowth(currentDayResults[0].total_units, sameDayLastWeekResults[0].total_units);
+        
+        const weekUnitsGrowthFromLastWeek = calculateGrowth(currentWeekResults[0].total_units, previousWeekResults[0].total_units);
+        const weekUnitsGrowthFromLastMonth = calculateGrowth(currentWeekResults[0].total_units, sameWeekLastMonthResults[0].total_units);
+        
+        const monthUnitsGrowthFromLastMonth = calculateGrowth(currentMonthResults[0].total_units, previousMonthResults[0].total_units);
+        const monthUnitsGrowthFromLastYear = calculateGrowth(currentMonthResults[0].total_units, sameMonthLastYearResults[0].total_units);
+        
+        // Liberar la conexión
+        connection.release();
+        
+        // Devolver resultados
+        res.status(200).json({
+            message: "Estadísticas comparativas de unidades vendidas obtenidas exitosamente",
+            daily: {
+                today: parseInt(currentDayResults[0].total_units),
+                yesterday: parseInt(previousDayResults[0].total_units),
+                sameDayLastWeek: parseInt(sameDayLastWeekResults[0].total_units),
+                growthFromYesterday: dayUnitsGrowthFromYesterday,
+                growthFromLastWeek: dayUnitsGrowthFromLastWeek
+            },
+            weekly: {
+                currentWeek: parseInt(currentWeekResults[0].total_units),
+                previousWeek: parseInt(previousWeekResults[0].total_units),
+                sameWeekLastMonth: parseInt(sameWeekLastMonthResults[0].total_units),
+                growthFromLastWeek: weekUnitsGrowthFromLastWeek,
+                growthFromLastMonth: weekUnitsGrowthFromLastMonth
+            },
+            monthly: {
+                currentMonth: parseInt(currentMonthResults[0].total_units),
+                previousMonth: parseInt(previousMonthResults[0].total_units),
+                sameMonthLastYear: parseInt(sameMonthLastYearResults[0].total_units),
+                growthFromLastMonth: monthUnitsGrowthFromLastMonth,
+                growthFromLastYear: monthUnitsGrowthFromLastYear
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener estadísticas de unidades vendidas:', error);
+        res.status(500).json({
+            message: 'Error al obtener estadísticas de unidades vendidas',
+            error: error.message
+        });
+    }
+};
+
+// Function to get total units sold (simple endpoint for current totals)
+exports.getUnitsSold = async (req, res) => {
+    try {
+        const connection = await pool.promise().getConnection();
+        
+        // Unidades vendidas hoy
+        const [todayUnits] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE DATE(p.fecha_pedido) = CURDATE()
+        `);
+        
+        // Unidades vendidas esta semana
+        const [weekUnits] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)
+        `);
+        
+        // Unidades vendidas este mes
+        const [monthUnits] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE()) AND MONTH(p.fecha_pedido) = MONTH(CURDATE())
+        `);
+        
+        // Unidades vendidas este año
+        const [yearUnits] = await connection.query(`
+            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE())
+        `);
+        
+        // Liberar la conexión
+        connection.release();
+        
+        // Devolver resultados
+        res.status(200).json({
+            message: "Unidades vendidas obtenidas exitosamente",
+            unitsSold: {
+                today: parseInt(todayUnits[0].total_units),
+                thisWeek: parseInt(weekUnits[0].total_units),
+                thisMonth: parseInt(monthUnits[0].total_units),
+                thisYear: parseInt(yearUnits[0].total_units)
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener unidades vendidas:', error);
+        res.status(500).json({
+            message: 'Error al obtener unidades vendidas',
+            error: error.message
+        });
+    }
+};
