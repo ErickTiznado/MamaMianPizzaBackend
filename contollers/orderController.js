@@ -1791,7 +1791,7 @@ exports.getTop5ProductsByUnits = async (req, res) => {
         // Top 5 productos por unidades vendidas (todos los tiempos)
         const [topProducts] = await connection.query(`
             SELECT 
-                pr.nombre_producto,
+                p.nombre_producto,
                 SUM(dp.cantidad) as total_units_sold,
                 COUNT(DISTINCT p.id_pedido) as orders_count,
                 SUM(dp.cantidad * dp.precio_unitario) as total_revenue
