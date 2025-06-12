@@ -17,6 +17,8 @@ router.get('/statistics/averages', orderController.getOrderAverages);
 router.get('/statistics/income', orderController.getNetIncomeStatistics);
 router.get('/statistics/units', orderController.getUnitsSoldStatistics);
 router.get('/statistics/units-per-order', orderController.getUnitsPerOrderStatistics);
+router.get('/statistics/top-products', orderController.getTop5ProductsByUnits);
+router.get('/statistics/top-products-filtered', orderController.getTop5ProductsByUnitsWithFilter);
 router.get('/income', orderController.getNetIncome);
 router.get('/units', orderController.getUnitsSold);
 router.get('/units-per-order', orderController.getUnitsPerOrder);

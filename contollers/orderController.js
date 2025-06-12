@@ -1810,3 +1810,169 @@ exports.getUnitsPerOrder = async (req, res) => {
         });
     }
 };
+
+// Function to get top 5 products by units sold
+exports.getTop5ProductsByUnits = async (req, res) => {
+    try {
+        const connection = await pool.promise().getConnection();
+        
+        // Query para obtener el top 5 de productos más vendidos por unidades
+        const [topProducts] = await connection.query(`
+            SELECT 
+                pr.id_producto,
+                pr.titulo as nombre_producto,
+                pr.descripcion,
+                pr.imagen,
+                pr.seccion,
+                SUM(dp.cantidad) as total_unidades_vendidas,
+                COUNT(DISTINCT dp.id_pedido) as pedidos_totales,
+                AVG(dp.precio_unitario) as precio_promedio,
+                SUM(dp.subtotal) as ingresos_totales
+            FROM detalle_pedidos dp
+            JOIN productos pr ON dp.id_producto = pr.id_producto
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE p.estado IN ('entregado', 'en_proceso', 'pendiente')
+            GROUP BY pr.id_producto, pr.titulo, pr.descripcion, pr.imagen, pr.seccion
+            ORDER BY total_unidades_vendidas DESC
+            LIMIT 5
+        `);
+        
+        // Calcular el total de unidades vendidas para obtener porcentajes
+        const [totalUnitsResult] = await connection.query(`
+            SELECT SUM(dp.cantidad) as total_global
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE p.estado IN ('entregado', 'en_proceso', 'pendiente')
+        `);
+        
+        const totalGlobalUnits = totalUnitsResult[0].total_global || 1;
+        
+        // Procesar los resultados para agregar porcentajes y formatear datos
+        const processedProducts = topProducts.map((product, index) => ({
+            ranking: index + 1,
+            id_producto: product.id_producto,
+            nombre_producto: product.nombre_producto,
+            descripcion: product.descripcion,
+            imagen: product.imagen,
+            seccion: product.seccion,
+            total_unidades_vendidas: parseInt(product.total_unidades_vendidas),
+            pedidos_totales: parseInt(product.pedidos_totales),
+            precio_promedio: parseFloat(product.precio_promedio).toFixed(2),
+            ingresos_totales: parseFloat(product.ingresos_totales).toFixed(2),
+            porcentaje_del_total: ((product.total_unidades_vendidas / totalGlobalUnits) * 100).toFixed(2),
+            unidades_por_pedido: (product.total_unidades_vendidas / product.pedidos_totales).toFixed(2)
+        }));
+        
+        // Liberar la conexión
+        connection.release();
+        
+        // Devolver resultados
+        res.status(200).json({
+            message: "Top 5 productos por unidades vendidas obtenido exitosamente",
+            total_productos_analizados: topProducts.length,
+            total_unidades_globales: parseInt(totalGlobalUnits),
+            top_products: processedProducts
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener top 5 productos por unidades:', error);
+        res.status(500).json({
+            message: 'Error al obtener top 5 productos por unidades',
+            error: error.message
+        });
+    }
+};
+
+// Function to get top 5 products by units sold with time filter
+exports.getTop5ProductsByUnitsWithFilter = async (req, res) => {
+    try {
+        const { period } = req.query; // 'today', 'week', 'month', 'year', or 'all' (default)
+        
+        const connection = await pool.promise().getConnection();
+        
+        // Construir la condición de fecha según el período solicitado
+        let dateCondition = '';
+        switch (period) {
+            case 'today':
+                dateCondition = 'AND DATE(p.fecha_pedido) = CURDATE()';
+                break;
+            case 'week':
+                dateCondition = 'AND YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)';
+                break;
+            case 'month':
+                dateCondition = 'AND YEAR(p.fecha_pedido) = YEAR(CURDATE()) AND MONTH(p.fecha_pedido) = MONTH(CURDATE())';
+                break;
+            case 'year':
+                dateCondition = 'AND YEAR(p.fecha_pedido) = YEAR(CURDATE())';
+                break;
+            default:
+                dateCondition = ''; // Todos los tiempos
+        }
+        
+        // Query para obtener el top 5 de productos más vendidos por unidades con filtro de tiempo
+        const [topProducts] = await connection.query(`
+            SELECT 
+                pr.id_producto,
+                pr.titulo as nombre_producto,
+                pr.descripcion,
+                pr.imagen,
+                pr.seccion,
+                SUM(dp.cantidad) as total_unidades_vendidas,
+                COUNT(DISTINCT dp.id_pedido) as pedidos_totales,
+                AVG(dp.precio_unitario) as precio_promedio,
+                SUM(dp.subtotal) as ingresos_totales
+            FROM detalle_pedidos dp
+            JOIN productos pr ON dp.id_producto = pr.id_producto
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE p.estado IN ('entregado', 'en_proceso', 'pendiente') ${dateCondition}
+            GROUP BY pr.id_producto, pr.titulo, pr.descripcion, pr.imagen, pr.seccion
+            ORDER BY total_unidades_vendidas DESC
+            LIMIT 5
+        `);
+        
+        // Calcular el total de unidades vendidas para el período específico
+        const [totalUnitsResult] = await connection.query(`
+            SELECT SUM(dp.cantidad) as total_global
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            WHERE p.estado IN ('entregado', 'en_proceso', 'pendiente') ${dateCondition}
+        `);
+        
+        const totalGlobalUnits = totalUnitsResult[0].total_global || 1;
+        
+        // Procesar los resultados
+        const processedProducts = topProducts.map((product, index) => ({
+            ranking: index + 1,
+            id_producto: product.id_producto,
+            nombre_producto: product.nombre_producto,
+            descripcion: product.descripcion,
+            imagen: product.imagen,
+            seccion: product.seccion,
+            total_unidades_vendidas: parseInt(product.total_unidades_vendidas),
+            pedidos_totales: parseInt(product.pedidos_totales),
+            precio_promedio: parseFloat(product.precio_promedio).toFixed(2),
+            ingresos_totales: parseFloat(product.ingresos_totales).toFixed(2),
+            porcentaje_del_total: ((product.total_unidades_vendidas / totalGlobalUnits) * 100).toFixed(2),
+            unidades_por_pedido: (product.total_unidades_vendidas / product.pedidos_totales).toFixed(2)
+        }));
+        
+        // Liberar la conexión
+        connection.release();
+        
+        // Devolver resultados
+        res.status(200).json({
+            message: `Top 5 productos por unidades vendidas (${period || 'todos los tiempos'}) obtenido exitosamente`,
+            period: period || 'all',
+            total_productos_analizados: topProducts.length,
+            total_unidades_periodo: parseInt(totalGlobalUnits),
+            top_products: processedProducts
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener top 5 productos por unidades con filtro:', error);
+        res.status(500).json({
+            message: 'Error al obtener top 5 productos por unidades con filtro',
+            error: error.message
+        });
+    }
+};
