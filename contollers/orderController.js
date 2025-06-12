@@ -1902,3 +1902,66 @@ exports.getTop5ProductsByUnitsWithFilter = async (req, res) => {
         });
     }
 };
+
+// Function to get orders by user ID
+exports.getOrdersByUserId = async (req, res) => {
+    const { userId } = req.params;
+    
+    if (!userId) {
+        return res.status(400).json({ message: 'ID de usuario requerido' });
+    }
+
+    try {
+        // Obtener todos los pedidos del usuario específico con sus detalles
+        const [orders] = await pool.promise().query(`
+            SELECT 
+                p.*,
+                u.nombre AS nombre_usuario,
+                d.direccion,
+                d.latitud,
+                d.longitud,
+                d.direccion_formateada
+            FROM 
+                pedidos p
+            LEFT JOIN 
+                usuarios u ON p.id_usuario = u.id_usuario
+            LEFT JOIN 
+                direcciones d ON p.id_direccion = d.id_direccion
+            WHERE 
+                p.id_usuario = ?
+            ORDER BY 
+                p.fecha_pedido DESC
+        `, [userId]);
+
+        if (orders.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron pedidos para este usuario' });
+        }
+
+        // Para cada pedido, obtener sus detalles de productos
+        for (const order of orders) {
+            const [detalles] = await pool.promise().query(`
+                SELECT 
+                    dp.*,
+                    pr.titulo AS nombre_producto_original,
+                    pr.descripcion
+                FROM 
+                    detalle_pedidos dp
+                LEFT JOIN
+                    productos pr ON dp.id_producto = pr.id_producto
+                WHERE 
+                    dp.id_pedido = ?
+            `, [order.id_pedido]);
+            
+            order.detalles = detalles;
+        }
+
+        res.json({
+            message: 'Pedidos obtenidos exitosamente',
+            total_pedidos: orders.length,
+            pedidos: orders
+        });
+    } catch (error) {
+        console.error('Error al obtener los pedidos del usuario:', error);
+        res.status(500).json({ message: 'Error al obtener los pedidos del usuario', error: error.message });
+    }
+};
