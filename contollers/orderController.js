@@ -1222,3 +1222,180 @@ exports.metodo_entrega = async (req, res) => {
             }
     })
 }
+
+// Function to get net income statistics by time period with comparative analysis
+exports.getNetIncomeStatistics = async (req, res) => {
+    try {
+        const connection = await pool.promise().getConnection();
+        
+        // ESTADÍSTICAS DE INGRESOS DEL DÍA ACTUAL Y COMPARATIVA
+        // Query para calcular ingresos netos de hoy
+        const [currentDayResults] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE DATE(fecha_pedido) = CURDATE()
+        `);
+        
+        // Query para calcular ingresos netos de ayer
+        const [previousDayResults] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE DATE(fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+        `);
+        
+        // Query para calcular ingresos netos del mismo día la semana pasada
+        const [sameDayLastWeekResults] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE DATE(fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        `);
+        
+        // ESTADÍSTICAS DE INGRESOS DE LA SEMANA ACTUAL Y COMPARATIVA
+        // Query para calcular ingresos netos de la semana actual (lunes a domingo)
+        const [currentWeekResults] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)
+        `);
+        
+        // Query para calcular ingresos netos de la semana anterior
+        const [previousWeekResults] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 1 WEEK), 1)
+        `);
+        
+        // Query para calcular ingresos netos de la misma semana el mes pasado
+        const [sameWeekLastMonthResults] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 4 WEEK), 1)
+        `);
+        
+        // ESTADÍSTICAS DE INGRESOS DEL MES ACTUAL Y COMPARATIVA
+        // Query para calcular ingresos netos del mes actual
+        const [currentMonthResults] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE YEAR(fecha_pedido) = YEAR(CURDATE()) AND MONTH(fecha_pedido) = MONTH(CURDATE())
+        `);
+        
+        // Query para calcular ingresos netos del mes anterior
+        const [previousMonthResults] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE YEAR(fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) 
+            AND MONTH(fecha_pedido) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+        `);
+        
+        // Query para calcular ingresos netos del mismo mes el año pasado
+        const [sameMonthLastYearResults] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE YEAR(fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 YEAR)) 
+            AND MONTH(fecha_pedido) = MONTH(CURDATE())
+        `);
+        
+        // Calcular porcentajes de crecimiento de ingresos
+        const dayIncomeGrowthFromYesterday = calculateGrowth(currentDayResults[0].total_income, previousDayResults[0].total_income);
+        const dayIncomeGrowthFromLastWeek = calculateGrowth(currentDayResults[0].total_income, sameDayLastWeekResults[0].total_income);
+        
+        const weekIncomeGrowthFromLastWeek = calculateGrowth(currentWeekResults[0].total_income, previousWeekResults[0].total_income);
+        const weekIncomeGrowthFromLastMonth = calculateGrowth(currentWeekResults[0].total_income, sameWeekLastMonthResults[0].total_income);
+        
+        const monthIncomeGrowthFromLastMonth = calculateGrowth(currentMonthResults[0].total_income, previousMonthResults[0].total_income);
+        const monthIncomeGrowthFromLastYear = calculateGrowth(currentMonthResults[0].total_income, sameMonthLastYearResults[0].total_income);
+        
+        // Liberar la conexión
+        connection.release();
+        
+        // Devolver resultados
+        res.status(200).json({
+            message: "Estadísticas comparativas de ingresos netos obtenidas exitosamente",
+            daily: {
+                today: parseFloat(currentDayResults[0].total_income).toFixed(2),
+                yesterday: parseFloat(previousDayResults[0].total_income).toFixed(2),
+                sameDayLastWeek: parseFloat(sameDayLastWeekResults[0].total_income).toFixed(2),
+                growthFromYesterday: dayIncomeGrowthFromYesterday,
+                growthFromLastWeek: dayIncomeGrowthFromLastWeek
+            },
+            weekly: {
+                currentWeek: parseFloat(currentWeekResults[0].total_income).toFixed(2),
+                previousWeek: parseFloat(previousWeekResults[0].total_income).toFixed(2),
+                sameWeekLastMonth: parseFloat(sameWeekLastMonthResults[0].total_income).toFixed(2),
+                growthFromLastWeek: weekIncomeGrowthFromLastWeek,
+                growthFromLastMonth: weekIncomeGrowthFromLastMonth
+            },
+            monthly: {
+                currentMonth: parseFloat(currentMonthResults[0].total_income).toFixed(2),
+                previousMonth: parseFloat(previousMonthResults[0].total_income).toFixed(2),
+                sameMonthLastYear: parseFloat(sameMonthLastYearResults[0].total_income).toFixed(2),
+                growthFromLastMonth: monthIncomeGrowthFromLastMonth,
+                growthFromLastYear: monthIncomeGrowthFromLastYear
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener estadísticas de ingresos netos:', error);
+        res.status(500).json({
+            message: 'Error al obtener estadísticas de ingresos netos',
+            error: error.message
+        });
+    }
+};
+
+// Function to get total net income (simple endpoint for current totals)
+exports.getNetIncome = async (req, res) => {
+    try {
+        const connection = await pool.promise().getConnection();
+        
+        // Ingresos totales de hoy
+        const [todayIncome] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE DATE(fecha_pedido) = CURDATE()
+        `);
+        
+        // Ingresos totales de esta semana
+        const [weekIncome] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE YEARWEEK(fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)
+        `);
+        
+        // Ingresos totales de este mes
+        const [monthIncome] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE YEAR(fecha_pedido) = YEAR(CURDATE()) AND MONTH(fecha_pedido) = MONTH(CURDATE())
+        `);
+        
+        // Ingresos totales de este año
+        const [yearIncome] = await connection.query(`
+            SELECT IFNULL(SUM(total), 0) as total_income 
+            FROM pedidos 
+            WHERE YEAR(fecha_pedido) = YEAR(CURDATE())
+        `);
+        
+        // Liberar la conexión
+        connection.release();
+        
+        // Devolver resultados
+        res.status(200).json({
+            message: "Ingresos netos obtenidos exitosamente",
+            netIncome: {
+                today: parseFloat(todayIncome[0].total_income).toFixed(2),
+                thisWeek: parseFloat(weekIncome[0].total_income).toFixed(2),
+                thisMonth: parseFloat(monthIncome[0].total_income).toFixed(2),
+                thisYear: parseFloat(yearIncome[0].total_income).toFixed(2)
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener ingresos netos:', error);
+        res.status(500).json({
+            message: 'Error al obtener ingresos netos',
+            error: error.message
+        });
+    }
+};
