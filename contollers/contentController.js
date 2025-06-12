@@ -94,7 +94,7 @@ exports.submitContent = (req, res) => {
       pool.query(
         `INSERT INTO productos
            (titulo, descripcion, seccion, id_categoria, activo, imagen, fecha_creacion, fecha_actualizacion)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actualDate, actualDate],
         (err, result) => {
           if (err) {
