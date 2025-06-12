@@ -75,7 +75,7 @@ exports.submitContent = (req, res) => {
       ? JSON.parse(precios)
       : precios;
 
-    if (!titulo || !descripcion || !porciones || !sesion || !categoria || !preciosObj) {
+    if (!titulo || !descripcion || !sesion || !categoria || !preciosObj) {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
     }
 
@@ -95,7 +95,7 @@ exports.submitContent = (req, res) => {
         `INSERT INTO productos
            (titulo, descripcion, seccion, id_categoria, activo, imagen, fecha_creacion, fecha_actualizacion)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [titulo, descripcion, porciones, sesion, idcategoria, activo, imagenPath, actualDate, actualDate],
+        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actualDate, actualDate],
         (err, result) => {
           if (err) {
             console.error(err);
