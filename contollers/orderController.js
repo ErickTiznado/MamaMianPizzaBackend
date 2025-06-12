@@ -1530,41 +1530,262 @@ exports.getUnitsSoldStatistics = async (req, res) => {
     }
 };
 
-// Function to get total units sold (simple endpoint for current totals)
-exports.getUnitsSold = async (req, res) => {
+// Function to get units per order statistics by time period with comparative analysis
+exports.getUnitsPerOrderStatistics = async (req, res) => {
     try {
         const connection = await pool.promise().getConnection();
         
-        // Unidades vendidas hoy
-        const [todayUnits] = await connection.query(`
-            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
-            FROM detalle_pedidos dp
-            JOIN pedidos p ON dp.id_pedido = p.id_pedido
-            WHERE DATE(p.fecha_pedido) = CURDATE()
+        // ESTADÍSTICAS DE UNIDADES POR PEDIDO DEL DÍA ACTUAL Y COMPARATIVA
+        // Query para calcular promedio de unidades por pedido de hoy
+        const [currentDayResults] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE DATE(p.fecha_pedido) = CURDATE()
+                GROUP BY p.id_pedido
+            ) as units_per_order_today
         `);
         
-        // Unidades vendidas esta semana
-        const [weekUnits] = await connection.query(`
-            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
-            FROM detalle_pedidos dp
-            JOIN pedidos p ON dp.id_pedido = p.id_pedido
-            WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)
+        // Query para calcular promedio de unidades por pedido de ayer
+        const [previousDayResults] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE DATE(p.fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+                GROUP BY p.id_pedido
+            ) as units_per_order_yesterday
         `);
         
-        // Unidades vendidas este mes
-        const [monthUnits] = await connection.query(`
-            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
-            FROM detalle_pedidos dp
-            JOIN pedidos p ON dp.id_pedido = p.id_pedido
-            WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE()) AND MONTH(p.fecha_pedido) = MONTH(CURDATE())
+        // Query para calcular promedio de unidades por pedido del mismo día la semana pasada
+        const [sameDayLastWeekResults] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE DATE(p.fecha_pedido) = DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+                GROUP BY p.id_pedido
+            ) as units_per_order_last_week
         `);
         
-        // Unidades vendidas este año
-        const [yearUnits] = await connection.query(`
-            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units 
-            FROM detalle_pedidos dp
-            JOIN pedidos p ON dp.id_pedido = p.id_pedido
-            WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE())
+        // ESTADÍSTICAS DE UNIDADES POR PEDIDO DE LA SEMANA ACTUAL Y COMPARATIVA
+        // Query para calcular promedio de unidades por pedido de la semana actual
+        const [currentWeekResults] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)
+                GROUP BY p.id_pedido
+            ) as units_per_order_current_week
+        `);
+        
+        // Query para calcular promedio de unidades por pedido de la semana anterior
+        const [previousWeekResults] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 1 WEEK), 1)
+                GROUP BY p.id_pedido
+            ) as units_per_order_previous_week
+        `);
+        
+        // Query para calcular promedio de unidades por pedido de la misma semana el mes pasado
+        const [sameWeekLastMonthResults] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 4 WEEK), 1)
+                GROUP BY p.id_pedido
+            ) as units_per_order_same_week_last_month
+        `);
+        
+        // ESTADÍSTICAS DE UNIDADES POR PEDIDO DEL MES ACTUAL Y COMPARATIVA
+        // Query para calcular promedio de unidades por pedido del mes actual
+        const [currentMonthResults] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE()) AND MONTH(p.fecha_pedido) = MONTH(CURDATE())
+                GROUP BY p.id_pedido
+            ) as units_per_order_current_month
+        `);
+        
+        // Query para calcular promedio de unidades por pedido del mes anterior
+        const [previousMonthResults] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE YEAR(p.fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) 
+                AND MONTH(p.fecha_pedido) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+                GROUP BY p.id_pedido
+            ) as units_per_order_previous_month
+        `);
+        
+        // Query para calcular promedio de unidades por pedido del mismo mes el año pasado
+        const [sameMonthLastYearResults] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE YEAR(p.fecha_pedido) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 YEAR)) 
+                AND MONTH(p.fecha_pedido) = MONTH(CURDATE())
+                GROUP BY p.id_pedido
+            ) as units_per_order_same_month_last_year
+        `);
+        
+        // Calcular porcentajes de crecimiento de unidades por pedido
+        const dayUnitsPerOrderGrowthFromYesterday = calculateGrowth(currentDayResults[0].avg_units_per_order, previousDayResults[0].avg_units_per_order);
+        const dayUnitsPerOrderGrowthFromLastWeek = calculateGrowth(currentDayResults[0].avg_units_per_order, sameDayLastWeekResults[0].avg_units_per_order);
+        
+        const weekUnitsPerOrderGrowthFromLastWeek = calculateGrowth(currentWeekResults[0].avg_units_per_order, previousWeekResults[0].avg_units_per_order);
+        const weekUnitsPerOrderGrowthFromLastMonth = calculateGrowth(currentWeekResults[0].avg_units_per_order, sameWeekLastMonthResults[0].avg_units_per_order);
+        
+        const monthUnitsPerOrderGrowthFromLastMonth = calculateGrowth(currentMonthResults[0].avg_units_per_order, previousMonthResults[0].avg_units_per_order);
+        const monthUnitsPerOrderGrowthFromLastYear = calculateGrowth(currentMonthResults[0].avg_units_per_order, sameMonthLastYearResults[0].avg_units_per_order);
+        
+        // Liberar la conexión
+        connection.release();
+        
+        // Devolver resultados
+        res.status(200).json({
+            message: "Estadísticas comparativas de unidades por pedido obtenidas exitosamente",
+            daily: {
+                today: parseFloat(currentDayResults[0].avg_units_per_order).toFixed(2),
+                yesterday: parseFloat(previousDayResults[0].avg_units_per_order).toFixed(2),
+                sameDayLastWeek: parseFloat(sameDayLastWeekResults[0].avg_units_per_order).toFixed(2),
+                growthFromYesterday: dayUnitsPerOrderGrowthFromYesterday,
+                growthFromLastWeek: dayUnitsPerOrderGrowthFromLastWeek
+            },
+            weekly: {
+                currentWeek: parseFloat(currentWeekResults[0].avg_units_per_order).toFixed(2),
+                previousWeek: parseFloat(previousWeekResults[0].avg_units_per_order).toFixed(2),
+                sameWeekLastMonth: parseFloat(sameWeekLastMonthResults[0].avg_units_per_order).toFixed(2),
+                growthFromLastWeek: weekUnitsPerOrderGrowthFromLastWeek,
+                growthFromLastMonth: weekUnitsPerOrderGrowthFromLastMonth
+            },
+            monthly: {
+                currentMonth: parseFloat(currentMonthResults[0].avg_units_per_order).toFixed(2),
+                previousMonth: parseFloat(previousMonthResults[0].avg_units_per_order).toFixed(2),
+                sameMonthLastYear: parseFloat(sameMonthLastYearResults[0].avg_units_per_order).toFixed(2),
+                growthFromLastMonth: monthUnitsPerOrderGrowthFromLastMonth,
+                growthFromLastYear: monthUnitsPerOrderGrowthFromLastYear
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener estadísticas de unidades por pedido:', error);
+        res.status(500).json({
+            message: 'Error al obtener estadísticas de unidades por pedido',
+            error: error.message
+        });
+    }
+};
+
+// Function to get current units per order averages (simple endpoint)
+exports.getUnitsPerOrder = async (req, res) => {
+    try {
+        const connection = await pool.promise().getConnection();
+        
+        // Promedio de unidades por pedido hoy
+        const [todayAvg] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE DATE(p.fecha_pedido) = CURDATE()
+                GROUP BY p.id_pedido
+            ) as units_per_order_today
+        `);
+        
+        // Promedio de unidades por pedido esta semana
+        const [weekAvg] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)
+                GROUP BY p.id_pedido
+            ) as units_per_order_this_week
+        `);
+        
+        // Promedio de unidades por pedido este mes
+        const [monthAvg] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE()) AND MONTH(p.fecha_pedido) = MONTH(CURDATE())
+                GROUP BY p.id_pedido
+            ) as units_per_order_this_month
+        `);
+        
+        // Promedio de unidades por pedido este año
+        const [yearAvg] = await connection.query(`
+            SELECT 
+                IFNULL(AVG(total_units_per_order), 0) as avg_units_per_order
+            FROM (
+                SELECT 
+                    p.id_pedido,
+                    SUM(dp.cantidad) as total_units_per_order
+                FROM pedidos p
+                JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
+                WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE())
+                GROUP BY p.id_pedido
+            ) as units_per_order_this_year
         `);
         
         // Liberar la conexión
@@ -1572,19 +1793,19 @@ exports.getUnitsSold = async (req, res) => {
         
         // Devolver resultados
         res.status(200).json({
-            message: "Unidades vendidas obtenidas exitosamente",
-            unitsSold: {
-                today: parseInt(todayUnits[0].total_units),
-                thisWeek: parseInt(weekUnits[0].total_units),
-                thisMonth: parseInt(monthUnits[0].total_units),
-                thisYear: parseInt(yearUnits[0].total_units)
+            message: "Promedio de unidades por pedido obtenidas exitosamente",
+            unitsPerOrder: {
+                today: parseFloat(todayAvg[0].avg_units_per_order).toFixed(2),
+                thisWeek: parseFloat(weekAvg[0].avg_units_per_order).toFixed(2),
+                thisMonth: parseFloat(monthAvg[0].avg_units_per_order).toFixed(2),
+                thisYear: parseFloat(yearAvg[0].avg_units_per_order).toFixed(2)
             }
         });
         
     } catch (error) {
-        console.error('Error al obtener unidades vendidas:', error);
+        console.error('Error al obtener promedio de unidades por pedido:', error);
         res.status(500).json({
-            message: 'Error al obtener unidades vendidas',
+            message: 'Error al obtener promedio de unidades por pedido',
             error: error.message
         });
     }
