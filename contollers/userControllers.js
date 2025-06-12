@@ -118,4 +118,29 @@ exports.createClient = (req, res) => {
     console.error('Error en el servidor', error);
     res.status(500).json({message: 'Error en el servidor'});
 }
-}
+};
+
+exports.getUserById = (req, res) => {
+    const { id } = req.params;
+    
+    if (!id) {
+        return res.status(400).json({ message: 'ID de usuario requerido' });
+    }
+
+    pool.query('SELECT * FROM usuarios WHERE id_usuario = ?', [id], (err, results) => {
+        if (err) {
+            console.error('Error al obtener usuario por ID', err);
+            return res.status(500).json({ error: 'Error al obtener usuario' });
+        }
+        
+        if (results.length === 0) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+
+        // Remove password from response for security
+        const user = results[0];
+        delete user.contrasena;
+        
+        res.status(200).json(user);
+    });
+};
