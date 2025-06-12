@@ -1787,18 +1787,17 @@ exports.getUnitsSold = async (req, res) => {
 exports.getTop5ProductsByUnits = async (req, res) => {
     try {
         const connection = await pool.promise().getConnection();
-        
-        // Top 5 productos por unidades vendidas (todos los tiempos)
+          // Top 5 productos por unidades vendidas (todos los tiempos)
         const [topProducts] = await connection.query(`
             SELECT 
-                p.nombre_producto,
+                pr.titulo as nombre_producto,
                 SUM(dp.cantidad) as total_units_sold,
                 COUNT(DISTINCT p.id_pedido) as orders_count,
                 SUM(dp.cantidad * dp.precio_unitario) as total_revenue
             FROM detalle_pedidos dp
             JOIN pedidos p ON dp.id_pedido = p.id_pedido
             JOIN productos pr ON dp.id_producto = pr.id_producto
-            GROUP BY dp.id_producto, pr.nombre_producto
+            GROUP BY dp.id_producto, pr.titulo
             ORDER BY total_units_sold DESC
             LIMIT 5
         `);
@@ -1860,11 +1859,10 @@ exports.getTop5ProductsByUnitsWithFilter = async (req, res) => {
                 whereClause = '';
                 periodName = 'todos los tiempos';
         }
-        
-        // Top 5 productos por unidades vendidas con filtro de período
+          // Top 5 productos por unidades vendidas con filtro de período
         const [topProducts] = await connection.query(`
             SELECT 
-                pr.nombre_producto,
+                pr.titulo as nombre_producto,
                 SUM(dp.cantidad) as total_units_sold,
                 COUNT(DISTINCT p.id_pedido) as orders_count,
                 SUM(dp.cantidad * dp.precio_unitario) as total_revenue
@@ -1872,7 +1870,7 @@ exports.getTop5ProductsByUnitsWithFilter = async (req, res) => {
             JOIN pedidos p ON dp.id_pedido = p.id_pedido
             JOIN productos pr ON dp.id_producto = pr.id_producto
             ${whereClause}
-            GROUP BY dp.id_producto, pr.nombre_producto
+            GROUP BY dp.id_producto, pr.titulo
             ORDER BY total_units_sold DESC
             LIMIT 5
         `);
