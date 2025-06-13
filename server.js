@@ -11,6 +11,7 @@ const testRoutes = require('./routes/testRoutes');
 const contentRoutes = require('./routes/contentRoutes');
 const inventoriRoutes = require('./routes/inventoriRoutes');
 const orderRoutes = require('./routes/orderRoutes');
+const customerRoutes = require('./routes/customerRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const tamanosRoutes = require('./routes/tamanosRoutes');
 // Initialize express app
@@ -66,6 +67,7 @@ app.use('/api/test', testRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/inventory', inventoriRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/customers', customerRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/tamanos', tamanosRoutes );
 // Default route
