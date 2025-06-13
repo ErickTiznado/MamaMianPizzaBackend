@@ -7,7 +7,6 @@ router.post('/neworder', orderController.createOrder);
 
 // Rutas para obtener y gestionar pedidos
 router.get('/orders', orderController.getAllOrders);
-router.get('/orders/user/:userId', orderController.getOrdersByUserId);
 router.get('/orders/status/:status', orderController.getOrdersByStatus);
 router.get('/orders/:id', orderController.getOrderById);
 router.put('/orders/:id/status', orderController.updateOrderStatus);
