@@ -1902,3 +1902,129 @@ exports.getTop5ProductsByUnitsWithFilter = async (req, res) => {
         });
     }
 };
+
+// Function to get top 5 products by revenue generated (all time)
+exports.getTop5ProductsByRevenue = async (req, res) => {
+    try {
+        const connection = await pool.promise().getConnection();
+        
+        // Top 5 productos por ingresos generados (todos los tiempos)
+        const [topProducts] = await connection.query(`
+            SELECT 
+                pr.titulo as nombre_producto,
+                SUM(dp.cantidad * dp.precio_unitario) as total_revenue,
+                SUM(dp.cantidad) as total_units_sold,
+                COUNT(DISTINCT p.id_pedido) as orders_count,
+                AVG(dp.precio_unitario) as avg_price
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            JOIN productos pr ON dp.id_producto = pr.id_producto
+            GROUP BY dp.id_producto, pr.titulo
+            ORDER BY total_revenue DESC
+            LIMIT 5
+        `);
+        
+        // Liberar la conexión
+        connection.release();
+        
+        // Formatear resultados
+        const formattedProducts = topProducts.map((product, index) => ({
+            rank: index + 1,
+            productName: product.nombre_producto,
+            totalRevenue: parseFloat(product.total_revenue).toFixed(2),
+            totalUnitsSold: parseInt(product.total_units_sold),
+            ordersCount: parseInt(product.orders_count),
+            avgPrice: parseFloat(product.avg_price).toFixed(2)
+        }));
+        
+        // Devolver resultados
+        res.status(200).json({
+            message: "Top 5 productos por ingresos generados obtenidos exitosamente",
+            topProducts: formattedProducts
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener top 5 productos por ingresos:', error);
+        res.status(500).json({
+            message: 'Error al obtener top 5 productos por ingresos',
+            error: error.message
+        });
+    }
+};
+
+// Function to get top 5 products by revenue generated with time period filter
+exports.getTop5ProductsByRevenueWithFilter = async (req, res) => {
+    try {
+        const { period } = req.query; // 'today', 'week', 'month', 'year'
+        const connection = await pool.promise().getConnection();
+        
+        let whereClause = '';
+        let periodName = 'todos los tiempos';
+        
+        switch (period) {
+            case 'today':
+                whereClause = 'WHERE DATE(p.fecha_pedido) = CURDATE()';
+                periodName = 'hoy';
+                break;
+            case 'week':
+                whereClause = 'WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)';
+                periodName = 'esta semana';
+                break;
+            case 'month':
+                whereClause = 'WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE()) AND MONTH(p.fecha_pedido) = MONTH(CURDATE())';
+                periodName = 'este mes';
+                break;
+            case 'year':
+                whereClause = 'WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE())';
+                periodName = 'este año';
+                break;
+            default:
+                whereClause = '';
+                periodName = 'todos los tiempos';
+        }
+        
+        // Top 5 productos por ingresos generados con filtro de período
+        const [topProducts] = await connection.query(`
+            SELECT 
+                pr.titulo as nombre_producto,
+                SUM(dp.cantidad * dp.precio_unitario) as total_revenue,
+                SUM(dp.cantidad) as total_units_sold,
+                COUNT(DISTINCT p.id_pedido) as orders_count,
+                AVG(dp.precio_unitario) as avg_price
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.id_pedido = p.id_pedido
+            JOIN productos pr ON dp.id_producto = pr.id_producto
+            ${whereClause}
+            GROUP BY dp.id_producto, pr.titulo
+            ORDER BY total_revenue DESC
+            LIMIT 5
+        `);
+        
+        // Liberar la conexión
+        connection.release();
+        
+        // Formatear resultados
+        const formattedProducts = topProducts.map((product, index) => ({
+            rank: index + 1,
+            productName: product.nombre_producto,
+            totalRevenue: parseFloat(product.total_revenue).toFixed(2),
+            totalUnitsSold: parseInt(product.total_units_sold),
+            ordersCount: parseInt(product.orders_count),
+            avgPrice: parseFloat(product.avg_price).toFixed(2)
+        }));
+        
+        // Devolver resultados
+        res.status(200).json({
+            message: `Top 5 productos por ingresos generados (${periodName}) obtenidos exitosamente`,
+            period: periodName,
+            topProducts: formattedProducts
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener top 5 productos por ingresos con filtro:', error);
+        res.status(500).json({
+            message: 'Error al obtener top 5 productos por ingresos con filtro',
+            error: error.message
+        });
+    }
+};
