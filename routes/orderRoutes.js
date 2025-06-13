@@ -22,6 +22,8 @@ router.get('/statistics/top-products', orderController.getTop5ProductsByUnits);
 router.get('/statistics/top-products-filtered', orderController.getTop5ProductsByUnitsWithFilter);
 router.get('/statistics/top-revenue', orderController.getTop5ProductsByRevenue);
 router.get('/statistics/top-revenue-filtered', orderController.getTop5ProductsByRevenueWithFilter);
+router.get('/statistics/product-combinations', orderController.getProductCombinations);
+router.get('/statistics/top-combinations', orderController.getTopProductCombinations);
 router.get('/income', orderController.getNetIncome);
 router.get('/units', orderController.getUnitsSold);
 router.get('/units-per-order', orderController.getUnitsPerOrderStatistics);

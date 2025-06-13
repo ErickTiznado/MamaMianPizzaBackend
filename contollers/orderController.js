@@ -1723,304 +1723,163 @@ exports.getUnitsPerOrderStatistics = async (req, res) => {
     }
 };
 
-// Function to get current units sold totals (simple endpoint)
-exports.getUnitsSold = async (req, res) => {
+// Function to get product combinations analysis with date range, ordering and pagination
+exports.getProductCombinations = async (req, res) => {
     try {
         const connection = await pool.promise().getConnection();
         
-        // Unidades vendidas hoy
-        const [todayUnits] = await connection.query(`
-            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units
-            FROM pedidos p
-            JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
-            WHERE DATE(p.fecha_pedido) = CURDATE()
-        `);
+        // Obtener parámetros de la query
+        const { 
+            startDate, 
+            endDate, 
+            sortBy = 'frequency', 
+            sortOrder = 'DESC', 
+            page = 1, 
+            limit = 20 
+        } = req.query;
         
-        // Unidades vendidas esta semana
-        const [weekUnits] = await connection.query(`
-            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units
-            FROM pedidos p
-            JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
-            WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)
-        `);
+        // Validar parámetros de ordenamiento
+        const validSortFields = ['frequency', 'product_a', 'product_b', 'total_revenue'];
+        const validSortOrders = ['ASC', 'DESC'];
         
-        // Unidades vendidas este mes
-        const [monthUnits] = await connection.query(`
-            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units
-            FROM pedidos p
-            JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
-            WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE()) AND MONTH(p.fecha_pedido) = MONTH(CURDATE())
-        `);
+        if (!validSortFields.includes(sortBy)) {
+            return res.status(400).json({
+                message: 'Campo de ordenamiento inválido',
+                validFields: validSortFields
+            });
+        }
         
-        // Unidades vendidas este año
-        const [yearUnits] = await connection.query(`
-            SELECT IFNULL(SUM(dp.cantidad), 0) as total_units
-            FROM pedidos p
-            JOIN detalle_pedidos dp ON p.id_pedido = dp.id_pedido
-            WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE())
-        `);
+        if (!validSortOrders.includes(sortOrder.toUpperCase())) {
+            return res.status(400).json({
+                message: 'Orden de clasificación inválido',
+                validOrders: validSortOrders
+            });
+        }
         
-        // Liberar la conexión
-        connection.release();
+        // Construir cláusula WHERE para el rango de fechas
+        let dateFilter = '';
+        const queryParams = [];
         
-        // Devolver resultados
-        res.status(200).json({
-            message: "Unidades vendidas obtenidas exitosamente",
-            unitsSold: {
-                today: parseInt(todayUnits[0].total_units),
-                thisWeek: parseInt(weekUnits[0].total_units),
-                thisMonth: parseInt(monthUnits[0].total_units),
-                thisYear: parseInt(yearUnits[0].total_units)
-            }
-        });
+        if (startDate && endDate) {
+            dateFilter = 'WHERE p.fecha_pedido >= ? AND p.fecha_pedido <= ?';
+            queryParams.push(startDate, endDate);
+        } else if (startDate) {
+            dateFilter = 'WHERE p.fecha_pedido >= ?';
+            queryParams.push(startDate);
+        } else if (endDate) {
+            dateFilter = 'WHERE p.fecha_pedido <= ?';
+            queryParams.push(endDate);
+        }
         
-    } catch (error) {
-        console.error('Error al obtener unidades vendidas:', error);
-        res.status(500).json({
-            message: 'Error al obtener unidades vendidas',
-            error: error.message
-        });
-    }
-};
-
-// Function to get top 5 products by units sold (all time)
-exports.getTop5ProductsByUnits = async (req, res) => {
-    try {
-        const connection = await pool.promise().getConnection();
-          // Top 5 productos por unidades vendidas (todos los tiempos)
-        const [topProducts] = await connection.query(`
+        // Calcular offset para paginación
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+        
+        // Query principal para obtener combinaciones de productos
+        const mainQuery = `
             SELECT 
-                pr.titulo as nombre_producto,
-                SUM(dp.cantidad) as total_units_sold,
-                COUNT(DISTINCT p.id_pedido) as orders_count,
-                SUM(dp.cantidad * dp.precio_unitario) as total_revenue
-            FROM detalle_pedidos dp
-            JOIN pedidos p ON dp.id_pedido = p.id_pedido
-            JOIN productos pr ON dp.id_producto = pr.id_producto
-            GROUP BY dp.id_producto, pr.titulo
-            ORDER BY total_units_sold DESC
-            LIMIT 5
-        `);
+                pr1.titulo as product_a,
+                pr2.titulo as product_b,
+                COUNT(*) as frequency,
+                SUM(dp1.precio_unitario + dp2.precio_unitario) as total_revenue,
+                AVG(dp1.precio_unitario + dp2.precio_unitario) as avg_order_value,
+                GROUP_CONCAT(DISTINCT p.id_pedido ORDER BY p.fecha_pedido DESC LIMIT 5) as recent_order_ids
+            FROM detalle_pedidos dp1
+            JOIN detalle_pedidos dp2 ON dp1.id_pedido = dp2.id_pedido AND dp1.id_producto < dp2.id_producto
+            JOIN pedidos p ON dp1.id_pedido = p.id_pedido
+            JOIN productos pr1 ON dp1.id_producto = pr1.id_producto
+            JOIN productos pr2 ON dp2.id_producto = pr2.id_producto
+            ${dateFilter}
+            GROUP BY dp1.id_producto, dp2.id_producto, pr1.titulo, pr2.titulo
+            ORDER BY ${sortBy === 'product_a' ? 'pr1.titulo' : 
+                      sortBy === 'product_b' ? 'pr2.titulo' : 
+                      sortBy === 'total_revenue' ? 'total_revenue' : 'frequency'} ${sortOrder.toUpperCase()}
+            LIMIT ? OFFSET ?
+        `;
         
-        // Liberar la conexión
-        connection.release();
+        // Query para contar el total de combinaciones (para paginación)
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM (
+                SELECT dp1.id_producto, dp2.id_producto
+                FROM detalle_pedidos dp1
+                JOIN detalle_pedidos dp2 ON dp1.id_pedido = dp2.id_pedido AND dp1.id_producto < dp2.id_producto
+                JOIN pedidos p ON dp1.id_pedido = p.id_pedido
+                ${dateFilter}
+                GROUP BY dp1.id_producto, dp2.id_producto
+            ) as combinations
+        `;
+        
+        // Ejecutar queries
+        queryParams.push(parseInt(limit), offset);
+        const [combinations] = await connection.query(mainQuery, queryParams);
+        
+        // Para el conteo, usar solo los parámetros de fecha
+        const countParams = dateFilter ? queryParams.slice(0, -2) : [];
+        const [countResult] = await connection.query(countQuery, countParams);
+        
+        const totalCombinations = countResult[0].total;
+        const totalPages = Math.ceil(totalCombinations / parseInt(limit));
         
         // Formatear resultados
-        const formattedProducts = topProducts.map((product, index) => ({
-            rank: index + 1,
-            productName: product.nombre_producto,
-            totalUnitsSold: parseInt(product.total_units_sold),
-            ordersCount: parseInt(product.orders_count),
-            totalRevenue: parseFloat(product.total_revenue).toFixed(2)
+        const formattedCombinations = combinations.map((combo, index) => ({
+            rank: offset + index + 1,
+            productA: combo.product_a,
+            productB: combo.product_b,
+            frequency: parseInt(combo.frequency),
+            totalRevenue: parseFloat(combo.total_revenue).toFixed(2),
+            avgOrderValue: parseFloat(combo.avg_order_value).toFixed(2),
+            recentOrderIds: combo.recent_order_ids ? combo.recent_order_ids.split(',').map(id => parseInt(id)) : []
         }));
-        
-        // Devolver resultados
-        res.status(200).json({
-            message: "Top 5 productos por unidades vendidas obtenidos exitosamente",
-            topProducts: formattedProducts
-        });
-        
-    } catch (error) {
-        console.error('Error al obtener top 5 productos por unidades:', error);
-        res.status(500).json({
-            message: 'Error al obtener top 5 productos por unidades',
-            error: error.message
-        });
-    }
-};
-
-// Function to get top 5 products by units sold with time period filter
-exports.getTop5ProductsByUnitsWithFilter = async (req, res) => {
-    try {
-        const { period } = req.query; // 'today', 'week', 'month', 'year'
-        const connection = await pool.promise().getConnection();
-        
-        let whereClause = '';
-        let periodName = 'todos los tiempos';
-        
-        switch (period) {
-            case 'today':
-                whereClause = 'WHERE DATE(p.fecha_pedido) = CURDATE()';
-                periodName = 'hoy';
-                break;
-            case 'week':
-                whereClause = 'WHERE YEARWEEK(p.fecha_pedido, 1) = YEARWEEK(CURDATE(), 1)';
-                periodName = 'esta semana';
-                break;
-            case 'month':
-                whereClause = 'WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE()) AND MONTH(p.fecha_pedido) = MONTH(CURDATE())';
-                periodName = 'este mes';
-                break;
-            case 'year':
-                whereClause = 'WHERE YEAR(p.fecha_pedido) = YEAR(CURDATE())';
-                periodName = 'este año';
-                break;
-            default:
-                whereClause = '';
-                periodName = 'todos los tiempos';
-        }
-          // Top 5 productos por unidades vendidas con filtro de período
-        const [topProducts] = await connection.query(`
-            SELECT 
-                pr.titulo as nombre_producto,
-                SUM(dp.cantidad) as total_units_sold,
-                COUNT(DISTINCT p.id_pedido) as orders_count,
-                SUM(dp.cantidad * dp.precio_unitario) as total_revenue
-            FROM detalle_pedidos dp
-            JOIN pedidos p ON dp.id_pedido = p.id_pedido
-            JOIN productos pr ON dp.id_producto = pr.id_producto
-            ${whereClause}
-            GROUP BY dp.id_producto, pr.titulo
-            ORDER BY total_units_sold DESC
-            LIMIT 5
-        `);
         
         // Liberar la conexión
         connection.release();
         
-        // Formatear resultados
-        const formattedProducts = topProducts.map((product, index) => ({
-            rank: index + 1,
-            productName: product.nombre_producto,
-            totalUnitsSold: parseInt(product.total_units_sold),
-            ordersCount: parseInt(product.orders_count),
-            totalRevenue: parseFloat(product.total_revenue).toFixed(2)
-        }));
+        // Construir información del período
+        let periodInfo = 'Todos los tiempos';
+        if (startDate && endDate) {
+            periodInfo = `Del ${startDate} al ${endDate}`;
+        } else if (startDate) {
+            periodInfo = `Desde ${startDate}`;
+        } else if (endDate) {
+            periodInfo = `Hasta ${endDate}`;
+        }
         
-        // Devolver resultados
+        // Devolver resultados con información de paginación
         res.status(200).json({
-            message: `Top 5 productos por unidades vendidas (${periodName}) obtenidos exitosamente`,
-            period: periodName,
-            topProducts: formattedProducts
+            message: "Combinaciones de productos obtenidas exitosamente",
+            period: periodInfo,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: totalPages,
+                totalItems: totalCombinations,
+                itemsPerPage: parseInt(limit),
+                hasNextPage: parseInt(page) < totalPages,
+                hasPreviousPage: parseInt(page) > 1
+            },
+            sorting: {
+                sortBy: sortBy,
+                sortOrder: sortOrder.toUpperCase()
+            },
+            combinations: formattedCombinations
         });
         
     } catch (error) {
-        console.error('Error al obtener top 5 productos por unidades con filtro:', error);
+        console.error('Error al obtener combinaciones de productos:', error);
         res.status(500).json({
-            message: 'Error al obtener top 5 productos por unidades con filtro',
+            message: 'Error al obtener combinaciones de productos',
             error: error.message
         });
     }
 };
 
-// Function to get orders by user ID
-exports.getOrdersByUserId = async (req, res) => {
-    const { userId } = req.params;
-    
-    if (!userId) {
-        return res.status(400).json({ message: 'ID de usuario requerido' });
-    }
-
-    try {
-        // Obtener todos los pedidos del usuario específico con sus detalles
-        const [orders] = await pool.promise().query(`
-            SELECT 
-                p.*,
-                u.nombre AS nombre_usuario,
-                d.direccion,
-                d.latitud,
-                d.longitud,
-                d.direccion_formateada
-            FROM 
-                pedidos p
-            LEFT JOIN 
-                usuarios u ON p.id_usuario = u.id_usuario
-            LEFT JOIN 
-                direcciones d ON p.id_direccion = d.id_direccion
-            WHERE 
-                p.id_usuario = ?
-            ORDER BY 
-                p.fecha_pedido DESC
-        `, [userId]);
-
-        if (orders.length === 0) {
-            return res.status(404).json({ message: 'No se encontraron pedidos para este usuario' });
-        }
-
-        // Para cada pedido, obtener sus detalles de productos
-        for (const order of orders) {
-            const [detalles] = await pool.promise().query(`
-                SELECT 
-                    dp.*,
-                    pr.titulo AS nombre_producto_original,
-                    pr.descripcion
-                FROM 
-                    detalle_pedidos dp
-                LEFT JOIN
-                    productos pr ON dp.id_producto = pr.id_producto
-                WHERE 
-                    dp.id_pedido = ?
-            `, [order.id_pedido]);
-            
-            order.detalles = detalles;
-        }
-
-        res.json({
-            message: 'Pedidos obtenidos exitosamente',
-            total_pedidos: orders.length,
-            pedidos: orders
-        });
-    } catch (error) {
-        console.error('Error al obtener los pedidos del usuario:', error);
-        res.status(500).json({ message: 'Error al obtener los pedidos del usuario', error: error.message });
-    }
-};
-
-// Function to get top 5 products by revenue generated (all time)
-exports.getTop5ProductsByRevenue = async (req, res) => {
+// Function to get top product combinations with simple parameters (most frequent combinations)
+exports.getTopProductCombinations = async (req, res) => {
     try {
         const connection = await pool.promise().getConnection();
         
-        // Top 5 productos por ingresos generados (todos los tiempos)
-        const [topProducts] = await connection.query(`
-            SELECT 
-                pr.titulo as nombre_producto,
-                SUM(dp.cantidad * dp.precio_unitario) as total_revenue,
-                SUM(dp.cantidad) as total_units_sold,
-                COUNT(DISTINCT p.id_pedido) as orders_count,
-                AVG(dp.precio_unitario) as avg_price
-            FROM detalle_pedidos dp
-            JOIN pedidos p ON dp.id_pedido = p.id_pedido
-            JOIN productos pr ON dp.id_producto = pr.id_producto
-            GROUP BY dp.id_producto, pr.titulo
-            ORDER BY total_revenue DESC
-            LIMIT 5
-        `);
+        const { limit = 10, period } = req.query;
         
-        // Liberar la conexión
-        connection.release();
-        
-        // Formatear resultados
-        const formattedProducts = topProducts.map((product, index) => ({
-            rank: index + 1,
-            productName: product.nombre_producto,
-            totalRevenue: parseFloat(product.total_revenue).toFixed(2),
-            totalUnitsSold: parseInt(product.total_units_sold),
-            ordersCount: parseInt(product.orders_count),
-            avgPrice: parseFloat(product.avg_price).toFixed(2)
-        }));
-        
-        // Devolver resultados
-        res.status(200).json({
-            message: "Top 5 productos por ingresos generados obtenidos exitosamente",
-            topProducts: formattedProducts
-        });
-        
-    } catch (error) {
-        console.error('Error al obtener top 5 productos por ingresos:', error);
-        res.status(500).json({
-            message: 'Error al obtener top 5 productos por ingresos',
-            error: error.message
-        });
-    }
-};
-
-// Function to get top 5 products by revenue generated with time period filter
-exports.getTop5ProductsByRevenueWithFilter = async (req, res) => {
-    try {
-        const { period } = req.query; // 'today', 'week', 'month', 'year'
-        const connection = await pool.promise().getConnection();
-        
+        // Construir filtro de período
         let whereClause = '';
         let periodName = 'todos los tiempos';
         
@@ -2046,47 +1905,50 @@ exports.getTop5ProductsByRevenueWithFilter = async (req, res) => {
                 periodName = 'todos los tiempos';
         }
         
-        // Top 5 productos por ingresos generados con filtro de período
-        const [topProducts] = await connection.query(`
+        // Query para obtener las combinaciones más frecuentes
+        const [combinations] = await connection.query(`
             SELECT 
-                pr.titulo as nombre_producto,
-                SUM(dp.cantidad * dp.precio_unitario) as total_revenue,
-                SUM(dp.cantidad) as total_units_sold,
-                COUNT(DISTINCT p.id_pedido) as orders_count,
-                AVG(dp.precio_unitario) as avg_price
-            FROM detalle_pedidos dp
-            JOIN pedidos p ON dp.id_pedido = p.id_pedido
-            JOIN productos pr ON dp.id_producto = pr.id_producto
+                pr1.titulo as product_a,
+                pr2.titulo as product_b,
+                COUNT(*) as frequency,
+                SUM(dp1.precio_unitario + dp2.precio_unitario) as total_revenue,
+                COUNT(DISTINCT p.id_pedido) as unique_orders
+            FROM detalle_pedidos dp1
+            JOIN detalle_pedidos dp2 ON dp1.id_pedido = dp2.id_pedido AND dp1.id_producto < dp2.id_producto
+            JOIN pedidos p ON dp1.id_pedido = p.id_pedido
+            JOIN productos pr1 ON dp1.id_producto = pr1.id_producto
+            JOIN productos pr2 ON dp2.id_producto = pr2.id_producto
             ${whereClause}
-            GROUP BY dp.id_producto, pr.titulo
-            ORDER BY total_revenue DESC
-            LIMIT 5
-        `);
+            GROUP BY dp1.id_producto, dp2.id_producto, pr1.titulo, pr2.titulo
+            ORDER BY frequency DESC
+            LIMIT ?
+        `, [parseInt(limit)]);
         
         // Liberar la conexión
         connection.release();
         
         // Formatear resultados
-        const formattedProducts = topProducts.map((product, index) => ({
+        const formattedCombinations = combinations.map((combo, index) => ({
             rank: index + 1,
-            productName: product.nombre_producto,
-            totalRevenue: parseFloat(product.total_revenue).toFixed(2),
-            totalUnitsSold: parseInt(product.total_units_sold),
-            ordersCount: parseInt(product.orders_count),
-            avgPrice: parseFloat(product.avg_price).toFixed(2)
+            productA: combo.product_a,
+            productB: combo.product_b,
+            frequency: parseInt(combo.frequency),
+            totalRevenue: parseFloat(combo.total_revenue).toFixed(2),
+            uniqueOrders: parseInt(combo.unique_orders)
         }));
         
         // Devolver resultados
         res.status(200).json({
-            message: `Top 5 productos por ingresos generados (${periodName}) obtenidos exitosamente`,
+            message: `Top ${limit} combinaciones de productos (${periodName}) obtenidas exitosamente`,
             period: periodName,
-            topProducts: formattedProducts
+            totalCombinations: formattedCombinations.length,
+            combinations: formattedCombinations
         });
         
     } catch (error) {
-        console.error('Error al obtener top 5 productos por ingresos con filtro:', error);
+        console.error('Error al obtener top combinaciones de productos:', error);
         res.status(500).json({
-            message: 'Error al obtener top 5 productos por ingresos con filtro',
+            message: 'Error al obtener top combinaciones de productos',
             error: error.message
         });
     }
