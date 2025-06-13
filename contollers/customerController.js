@@ -86,13 +86,12 @@ exports.getUniqueCustomersServed = async (req, res) => {
                     : '0.00'
             };
         }
-        
-        // TOP 10 CLIENTES CON MAYOR GASTO (GLOBAL)
+          // TOP 10 CLIENTES CON MAYOR GASTO (GLOBAL)
         const [topSpendingCustomers] = await connection.query(`
             SELECT 
                 u.id_usuario,
                 u.nombre,
-                u.email,
+                u.correo,
                 SUM(p.total) as total_spent,
                 COUNT(p.id_pedido) as total_orders,
                 AVG(p.total) as avg_order_value,
@@ -100,7 +99,7 @@ exports.getUniqueCustomersServed = async (req, res) => {
                 MAX(p.fecha_pedido) as latest_order_date
             FROM pedidos p
             JOIN usuarios u ON p.id_usuario = u.id_usuario
-            GROUP BY u.id_usuario, u.nombre, u.email
+            GROUP BY u.id_usuario, u.nombre, u.correo
             ORDER BY total_spent DESC
             LIMIT 10
         `);
@@ -150,13 +149,12 @@ exports.getUniqueCustomersServed = async (req, res) => {
         
         // Liberar la conexión
         connection.release();
-        
-        // Formatear top clientes
+          // Formatear top clientes
         const formattedTopCustomers = topSpendingCustomers.map((customer, index) => ({
             rank: index + 1,
             customerId: customer.id_usuario,
             customerName: customer.nombre,
-            email: customer.email,
+            email: customer.correo,
             totalSpent: parseFloat(customer.total_spent).toFixed(2),
             totalOrders: parseInt(customer.total_orders),
             avgOrderValue: parseFloat(customer.avg_order_value).toFixed(2),
@@ -483,11 +481,10 @@ exports.getCustomerLifetimeValue = async (req, res) => {
                     WHEN total_spent >= 200 THEN 'Medium Value'
                     ELSE 'Low Value'
                 END as customer_segment
-            FROM (
-                SELECT 
+            FROM (                SELECT 
                     p.id_usuario,
                     u.nombre,
-                    u.email,
+                    u.correo,
                     COUNT(p.id_pedido) as order_count,
                     SUM(p.total) as total_spent,
                     AVG(p.total) as avg_order_value,
@@ -497,7 +494,7 @@ exports.getCustomerLifetimeValue = async (req, res) => {
                     DATEDIFF(CURDATE(), MAX(p.fecha_pedido)) as days_since_last_order
                 FROM pedidos p
                 JOIN usuarios u ON p.id_usuario = u.id_usuario
-                GROUP BY p.id_usuario, u.nombre, u.email
+                GROUP BY p.id_usuario, u.nombre, u.correo
             ) as customer_stats
             ORDER BY estimated_clv DESC
         `);
@@ -534,20 +531,19 @@ exports.getCustomerLifetimeValue = async (req, res) => {
             GROUP BY customer_segment
             ORDER BY avg_clv DESC
         `);
-        
-        // CLIENTES EN RIESGO (NO HAN PEDIDO EN MUCHO TIEMPO)
+          // CLIENTES EN RIESGO (NO HAN PEDIDO EN MUCHO TIEMPO)
         const [customersAtRisk] = await connection.query(`
             SELECT 
                 p.id_usuario,
                 u.nombre,
-                u.email,
+                u.correo,
                 SUM(p.total) as total_spent,
                 COUNT(p.id_pedido) as order_count,
                 MAX(p.fecha_pedido) as last_order_date,
                 DATEDIFF(CURDATE(), MAX(p.fecha_pedido)) as days_since_last_order
             FROM pedidos p
             JOIN usuarios u ON p.id_usuario = u.id_usuario
-            GROUP BY p.id_usuario, u.nombre, u.email
+            GROUP BY p.id_usuario, u.nombre, u.correo
             HAVING days_since_last_order > 60 AND total_spent > 100
             ORDER BY total_spent DESC, days_since_last_order DESC
             LIMIT 20
@@ -556,11 +552,10 @@ exports.getCustomerLifetimeValue = async (req, res) => {
         connection.release();
         
         // Formatear análisis CLV
-        const formattedClvAnalysis = clvAnalysis.slice(0, 50).map((customer, index) => ({
-            rank: index + 1,
+        const formattedClvAnalysis = clvAnalysis.slice(0, 50).map((customer, index) => ({            rank: index + 1,
             customerId: customer.id_usuario,
             customerName: customer.nombre,
-            email: customer.email,
+            email: customer.correo,
             orderCount: parseInt(customer.order_count),
             totalSpent: parseFloat(customer.total_spent).toFixed(2),
             avgOrderValue: parseFloat(customer.avg_order_value).toFixed(2),
@@ -584,11 +579,10 @@ exports.getCustomerLifetimeValue = async (req, res) => {
         }));
         
         // Formatear clientes en riesgo
-        const formattedCustomersAtRisk = customersAtRisk.map((customer, index) => ({
-            rank: index + 1,
+        const formattedCustomersAtRisk = customersAtRisk.map((customer, index) => ({            rank: index + 1,
             customerId: customer.id_usuario,
             customerName: customer.nombre,
-            email: customer.email,
+            email: customer.correo,
             totalSpent: parseFloat(customer.total_spent).toFixed(2),
             orderCount: parseInt(customer.order_count),
             lastOrderDate: customer.last_order_date,
