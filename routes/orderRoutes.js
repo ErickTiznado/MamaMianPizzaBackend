@@ -24,7 +24,7 @@ router.get('/statistics/top-revenue', orderController.getTop5ProductsByRevenue);
 router.get('/statistics/top-revenue-filtered', orderController.getTop5ProductsByRevenueWithFilter);
 router.get('/income', orderController.getNetIncome);
 router.get('/units', orderController.getUnitsSold);
-router.get('/units-per-order', orderController.getUnitsPerOrder);
+router.get('/units-per-order', orderController.getUnitsPerOrderStatistics);
 router.get('/satistics/entregas', orderController.metodo_entrega);
 // Ruta para reparar pedidos sin detalles
 router.post('/orders/:id_pedido/repair', orderController.checkOrderDetails);
