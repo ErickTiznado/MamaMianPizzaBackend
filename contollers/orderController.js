@@ -2130,39 +2130,26 @@ exports.getProductCombinations = async (req, res) => {
         const pageNumber = Math.max(1, parseInt(page));
         const limitNumber = Math.min(100, Math.max(1, parseInt(limit))); // Máximo 100 registros por página
         const offset = (pageNumber - 1) * limitNumber;
-        
-        // Query para obtener combinaciones de productos
+          // Query para obtener combinaciones de productos
         const combinationsQuery = `
-            WITH ProductPairs AS (
-                SELECT 
-                    dp1.id_producto as product_a_id,
-                    dp2.id_producto as product_b_id,
-                    pr1.titulo as product_a,
-                    pr2.titulo as product_b,
-                    COUNT(*) as frequency,
-                    SUM(dp1.precio_unitario + dp2.precio_unitario) as total_revenue,
-                    AVG(dp1.precio_unitario + dp2.precio_unitario) as avg_revenue_per_combination
-                FROM detalle_pedidos dp1
-                JOIN detalle_pedidos dp2 ON dp1.id_pedido = dp2.id_pedido 
-                    AND dp1.id_producto < dp2.id_producto
-                JOIN pedidos p ON dp1.id_pedido = p.id_pedido
-                JOIN productos pr1 ON dp1.id_producto = pr1.id_producto
-                JOIN productos pr2 ON dp2.id_producto = pr2.id_producto
-                WHERE 1=1 ${dateFilter}
-                GROUP BY dp1.id_producto, dp2.id_producto, pr1.titulo, pr2.titulo
-            )
             SELECT 
-                product_a_id,
-                product_b_id,
-                product_a,
-                product_b,
-                frequency,
-                total_revenue,
-                avg_revenue_per_combination,
-                ROUND((frequency * 100.0 / (SELECT SUM(frequency) FROM ProductPairs)), 2) as percentage_of_total
-            FROM ProductPairs
-            ORDER BY ${validSortBy === 'product_a' ? 'product_a' : 
-                     validSortBy === 'product_b' ? 'product_b' : 
+                dp1.id_producto as product_a_id,
+                dp2.id_producto as product_b_id,
+                pr1.titulo as product_a,
+                pr2.titulo as product_b,
+                COUNT(*) as frequency,
+                SUM(dp1.precio_unitario + dp2.precio_unitario) as total_revenue,
+                AVG(dp1.precio_unitario + dp2.precio_unitario) as avg_revenue_per_combination
+            FROM detalle_pedidos dp1
+            JOIN detalle_pedidos dp2 ON dp1.id_pedido = dp2.id_pedido 
+                AND dp1.id_producto < dp2.id_producto
+            JOIN pedidos p ON dp1.id_pedido = p.id_pedido
+            JOIN productos pr1 ON dp1.id_producto = pr1.id_producto
+            JOIN productos pr2 ON dp2.id_producto = pr2.id_producto
+            WHERE 1=1 ${dateFilter}
+            GROUP BY dp1.id_producto, dp2.id_producto, pr1.titulo, pr2.titulo
+            ORDER BY ${validSortBy === 'product_a' ? 'pr1.titulo' : 
+                     validSortBy === 'product_b' ? 'pr2.titulo' : 
                      validSortBy === 'total_revenue' ? 'total_revenue' : 'frequency'} ${validSortOrder}
             LIMIT ? OFFSET ?
         `;
@@ -2172,14 +2159,13 @@ exports.getProductCombinations = async (req, res) => {
         
         // Ejecutar query principal
         const [combinations] = await connection.query(combinationsQuery, queryParams);
-        
-        // Query para contar el total de combinaciones (para paginación)
+          // Query para contar el total de combinaciones (para paginación)
         const countQuery = `
             SELECT COUNT(*) as total
             FROM (
                 SELECT 
-                    dp1.id_producto,
-                    dp2.id_producto
+                    dp1.id_producto as product_a_id,
+                    dp2.id_producto as product_b_id
                 FROM detalle_pedidos dp1
                 JOIN detalle_pedidos dp2 ON dp1.id_pedido = dp2.id_pedido 
                     AND dp1.id_producto < dp2.id_producto
@@ -2190,30 +2176,15 @@ exports.getProductCombinations = async (req, res) => {
         `;
         
         const [totalCount] = await connection.query(countQuery, queryParams.slice(0, -2)); // Excluir limit y offset
-        
-        // Query para estadísticas adicionales
+          // Query para estadísticas adicionales
         const statsQuery = `
             SELECT 
                 COUNT(DISTINCT p.id_pedido) as total_orders_in_period,
-                COUNT(DISTINCT CONCAT(dp1.id_producto, '-', dp2.id_producto)) as unique_combinations,
-                AVG(combination_freq.frequency) as avg_frequency
+                COUNT(DISTINCT CONCAT(dp1.id_producto, '-', dp2.id_producto)) as unique_combinations
             FROM detalle_pedidos dp1
             JOIN detalle_pedidos dp2 ON dp1.id_pedido = dp2.id_pedido 
                 AND dp1.id_producto < dp2.id_producto
             JOIN pedidos p ON dp1.id_pedido = p.id_pedido
-            JOIN (
-                SELECT 
-                    dp1.id_producto as prod1,
-                    dp2.id_producto as prod2,
-                    COUNT(*) as frequency
-                FROM detalle_pedidos dp1
-                JOIN detalle_pedidos dp2 ON dp1.id_pedido = dp2.id_pedido 
-                    AND dp1.id_producto < dp2.id_producto
-                JOIN pedidos p ON dp1.id_pedido = p.id_pedido
-                WHERE 1=1 ${dateFilter}
-                GROUP BY dp1.id_producto, dp2.id_producto
-            ) as combination_freq ON dp1.id_producto = combination_freq.prod1 
-                AND dp2.id_producto = combination_freq.prod2
             WHERE 1=1 ${dateFilter}
         `;
         
@@ -2221,8 +2192,7 @@ exports.getProductCombinations = async (req, res) => {
         
         // Liberar la conexión
         connection.release();
-        
-        // Formatear resultados
+          // Formatear resultados
         const formattedCombinations = combinations.map((combo, index) => ({
             rank: offset + index + 1,
             productA: {
@@ -2235,8 +2205,7 @@ exports.getProductCombinations = async (req, res) => {
             },
             frequency: parseInt(combo.frequency),
             totalRevenue: parseFloat(combo.total_revenue).toFixed(2),
-            avgRevenuePerCombination: parseFloat(combo.avg_revenue_per_combination).toFixed(2),
-            percentageOfTotal: parseFloat(combo.percentage_of_total)
+            avgRevenuePerCombination: parseFloat(combo.avg_revenue_per_combination).toFixed(2)
         }));
         
         // Información de paginación
@@ -2260,11 +2229,9 @@ exports.getProductCombinations = async (req, res) => {
                 endDate: endDate || null,
                 sortBy: validSortBy,
                 sortOrder: validSortOrder.toLowerCase()
-            },
-            statistics: {
+            },            statistics: {
                 totalOrdersInPeriod: parseInt(stats[0]?.total_orders_in_period || 0),
-                uniqueCombinations: parseInt(stats[0]?.unique_combinations || 0),
-                avgFrequency: parseFloat(stats[0]?.avg_frequency || 0).toFixed(2)
+                uniqueCombinations: parseInt(stats[0]?.unique_combinations || 0)
             }
         });
         
