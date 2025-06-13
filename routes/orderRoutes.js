@@ -7,6 +7,7 @@ router.post('/neworder', orderController.createOrder);
 
 // Rutas para obtener y gestionar pedidos
 router.get('/orders', orderController.getAllOrders);
+router.get('/orders/user/:userId', orderController.getOrdersByUserId);
 router.get('/orders/status/:status', orderController.getOrdersByStatus);
 router.get('/orders/:id', orderController.getOrderById);
 router.put('/orders/:id/status', orderController.updateOrderStatus);
@@ -22,7 +23,6 @@ router.get('/statistics/top-products-filtered', orderController.getTop5ProductsB
 router.get('/statistics/top-revenue', orderController.getTop5ProductsByRevenue);
 router.get('/statistics/top-revenue-filtered', orderController.getTop5ProductsByRevenueWithFilter);
 router.get('/statistics/product-combinations', orderController.getProductCombinations);
-router.get('/statistics/top-combinations', orderController.getTopProductCombinations);
 router.get('/income', orderController.getNetIncome);
 router.get('/units', orderController.getUnitsSold);
 router.get('/units-per-order', orderController.getUnitsPerOrderStatistics);
