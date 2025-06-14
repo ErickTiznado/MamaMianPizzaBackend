@@ -1115,3 +1115,377 @@ exports.getUserOrders = async (req, res) => {
         });
     }
 };
+
+// Function to get detailed cohort retention analysis for heatmap visualization
+exports.getCohortRetentionAnalysis = async (req, res) => {
+    try {
+        const { 
+            startDate, 
+            endDate, 
+            maxMonths = 12,
+            page = 1,
+            limit = 50,
+            timezone = 'America/El_Salvador',
+            currency = 'USD'
+        } = req.query;
+        
+        const connection = await pool.promise().getConnection();
+        
+        // Validar parámetros de paginación
+        const pageNumber = Math.max(1, parseInt(page));
+        const limitNumber = Math.min(100, Math.max(1, parseInt(limit)));
+        const offset = (pageNumber - 1) * limitNumber;
+        
+        // Definir rango temporal por defecto (últimos 12 meses si no se especifica)
+        const defaultStartDate = startDate || new Date(new Date().setMonth(new Date().getMonth() - 12)).toISOString().split('T')[0];
+        const defaultEndDate = endDate || new Date().toISOString().split('T')[0];
+          // PASO 1: Contar total de cohortes para paginación
+        const [totalCohortsCount] = await connection.query(`
+            SELECT COUNT(*) as total
+            FROM (
+                SELECT DATE_FORMAT(first_order_date, '%Y-%m') as cohort_month
+                FROM (
+                    SELECT 
+                        id_usuario,
+                        MIN(fecha_pedido) as first_order_date
+                    FROM pedidos
+                    GROUP BY id_usuario
+                ) as first_orders
+                WHERE DATE(first_order_date) BETWEEN ? AND ?
+                GROUP BY cohort_month
+            ) as cohort_count
+        `, [defaultStartDate, defaultEndDate]);
+        
+        const totalCohorts = totalCohortsCount[0].total;
+        const totalPages = Math.ceil(totalCohorts / limitNumber);
+        
+        // PASO 2: Identificar las cohortes con paginación (mes de primera compra)
+        const [cohortIdentification] = await connection.query(`
+            SELECT 
+                DATE_FORMAT(first_order_date, '%Y-%m') as cohort_month,
+                DATE_FORMAT(first_order_date, '%Y-%m-01') as cohort_date,
+                COUNT(*) as cohort_size,
+                MIN(first_order_date) as earliest_first_order,
+                MAX(first_order_date) as latest_first_order
+            FROM (
+                SELECT 
+                    id_usuario,
+                    MIN(fecha_pedido) as first_order_date
+                FROM pedidos
+                GROUP BY id_usuario
+            ) as first_orders
+            WHERE DATE(first_order_date) BETWEEN ? AND ?
+            GROUP BY cohort_month, cohort_date
+            ORDER BY cohort_month DESC
+            LIMIT ? OFFSET ?
+        `, [defaultStartDate, defaultEndDate, limitNumber, offset]);
+          // PASO 3: Para cada cohorte, calcular la retención mes a mes
+        const cohortRetentionData = [];
+        
+        for (const cohort of cohortIdentification) {
+            const cohortMonth = cohort.cohort_month;
+            const cohortDate = cohort.cohort_date;
+            const cohortSize = cohort.cohort_size;
+            
+            // Obtener clientes de esta cohorte
+            const [cohortCustomers] = await connection.query(`
+                SELECT DISTINCT id_usuario
+                FROM (
+                    SELECT 
+                        id_usuario,
+                        MIN(fecha_pedido) as first_order_date
+                    FROM pedidos
+                    GROUP BY id_usuario
+                ) as first_orders
+                WHERE DATE_FORMAT(first_order_date, '%Y-%m') = ?
+            `, [cohortMonth]);
+            
+            const customerIds = cohortCustomers.map(c => c.id_usuario);
+            
+            // Calcular retención para cada mes desde la primera compra
+            const retention = [];
+            
+            for (let monthOffset = 0; monthOffset <= parseInt(maxMonths); monthOffset++) {
+                if (customerIds.length > 0) {
+                    // Calcular el rango de fechas para este mes offset
+                    const targetMonthStart = new Date(cohortDate);
+                    targetMonthStart.setMonth(targetMonthStart.getMonth() + monthOffset);
+                    
+                    const targetMonthEnd = new Date(targetMonthStart);
+                    targetMonthEnd.setMonth(targetMonthEnd.getMonth() + 1);
+                    targetMonthEnd.setDate(0); // Último día del mes
+                    
+                    // Verificar si ya hemos superado la fecha actual
+                    if (targetMonthStart > new Date()) {
+                        break;
+                    }
+                    
+                    // Contar clientes que compraron en este mes offset
+                    const [retentionCount] = await connection.query(`
+                        SELECT COUNT(DISTINCT id_usuario) as retained_customers
+                        FROM pedidos
+                        WHERE id_usuario IN (${customerIds.map(() => '?').join(',')})
+                        AND DATE(fecha_pedido) >= ? 
+                        AND DATE(fecha_pedido) <= ?
+                    `, [...customerIds, targetMonthStart.toISOString().split('T')[0], targetMonthEnd.toISOString().split('T')[0]]);
+                    
+                    const retainedCustomers = retentionCount[0].retained_customers;
+                    const retentionPercentage = cohortSize > 0 ? (retainedCustomers / cohortSize * 100) : 0;
+                    
+                    retention.push({
+                        month: monthOffset,
+                        customers: parseInt(retainedCustomers),
+                        pct: parseFloat(parseFloat(retentionPercentage).toFixed(2))
+                    });
+                }
+            }
+            
+            cohortRetentionData.push({
+                month: cohortMonth,
+                date: cohortDate,
+                initialSize: parseInt(cohortSize),
+                retention: retention
+            });
+        }
+          // PASO 4: Calcular estadísticas generales
+        const totalCustomersAnalyzed = cohortRetentionData.reduce((sum, cohort) => sum + cohort.initialSize, 0);
+        const actualMaxMonths = Math.max(...cohortRetentionData.map(cohort => 
+            Math.max(...cohort.retention.map(series => series.month))
+        ));
+        
+        // PASO 5: Calcular promedios de retención por mes offset como array ordenado
+        const avgRetentionByMonth = [];
+        for (let i = 0; i <= actualMaxMonths; i++) {
+            const cohortsWithThisMonth = cohortRetentionData.filter(cohort => 
+                cohort.retention.some(series => series.month === i)
+            );
+            
+            if (cohortsWithThisMonth.length > 0) {
+                const avgRetention = cohortsWithThisMonth.reduce((sum, cohort) => {
+                    const monthData = cohort.retention.find(series => series.month === i);
+                    return sum + (monthData ? monthData.pct : 0);
+                }, 0) / cohortsWithThisMonth.length;
+                
+                avgRetentionByMonth[i] = parseFloat(parseFloat(avgRetention).toFixed(2));
+            } else {
+                avgRetentionByMonth[i] = 0;
+            }
+        }
+        
+        // PASO 6: Identificar la mejor cohorte y sus métricas
+        let bestCohort = null;
+        let bestCohortRetention = 0;
+        
+        if (cohortRetentionData.length > 0) {
+            bestCohort = cohortRetentionData.reduce((best, current) => {
+                const currentAvgRetention = current.retention.length > 1 ? 
+                    current.retention.slice(1).reduce((sum, s) => sum + s.pct, 0) / (current.retention.length - 1) : 0;
+                const bestAvgRetention = best.retention.length > 1 ? 
+                    best.retention.slice(1).reduce((sum, s) => sum + s.pct, 0) / (best.retention.length - 1) : 0;
+                
+                if (currentAvgRetention > bestAvgRetention) {
+                    bestCohortRetention = currentAvgRetention;
+                    return current;
+                }
+                return best;
+            });
+        }
+        
+        // PASO 7: Determinar tendencia general
+        let trend = "Estable";
+        if (avgRetentionByMonth.length > 3) {
+            const early = (avgRetentionByMonth[1] + avgRetentionByMonth[2]) / 2;
+            const late = avgRetentionByMonth.length > 5 ? 
+                (avgRetentionByMonth[4] + avgRetentionByMonth[5]) / 2 : 
+                avgRetentionByMonth[3];
+            
+            if (late > early * 1.1) {
+                trend = "Mejorando";
+            } else if (late < early * 0.9) {
+                trend = "Declinando";
+            }
+        }
+        
+        connection.release();
+          // Preparar respuesta
+        res.status(200).json({
+            message: 'Análisis de cohortes de retención obtenido exitosamente',
+            metadata: {
+                range: {
+                    from: defaultStartDate,
+                    to: defaultEndDate
+                },
+                maxMonths: actualMaxMonths,
+                timezone: timezone,
+                currency: currency,
+                generatedAt: new Date().toISOString()
+            },
+            pagination: {
+                currentPage: pageNumber,
+                totalPages: totalPages,
+                totalItems: totalCohorts,
+                itemsPerPage: limitNumber,
+                hasNextPage: pageNumber < totalPages,
+                hasPreviousPage: pageNumber > 1
+            },
+            totals: {
+                totalCohorts: parseInt(totalCohorts),
+                uniqueCustomers: totalCustomersAnalyzed,
+                avgRetentionByMonth: avgRetentionByMonth
+            },
+            cohorts: cohortRetentionData,
+            insights: {
+                bestCohort: bestCohort ? bestCohort.month : null,
+                bestCohortRetention: parseFloat(parseFloat(bestCohortRetention).toFixed(2)),
+                month1Retention: avgRetentionByMonth[1] || 0,
+                month3Retention: avgRetentionByMonth[3] || 0,
+                month6Retention: avgRetentionByMonth[6] || 0,
+                trend: trend
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener análisis de cohortes de retención:', error);
+        res.status(500).json({
+            message: 'Error al obtener análisis de cohortes de retención',
+            error: error.message
+        });
+    }
+};
+
+// Function to get new vs recurring customers report by month
+exports.getNewVsRecurringCustomersReport = async (req, res) => {
+    try {
+        const { from, to } = req.query;
+        
+        if (!from || !to) {
+            return res.status(400).json({
+                message: 'Parámetros requeridos: from y to (formato ISO 8601)'
+            });
+        }
+        
+        const connection = await pool.promise().getConnection();
+        
+        // Convertir fechas ISO a formato MySQL
+        const startDate = new Date(from).toISOString().split('T')[0];
+        const endDate = new Date(to).toISOString().split('T')[0];          // Query para obtener clientes nuevos y recurrentes por mes
+        const [monthlyReport] = await connection.query(`
+            SELECT 
+                mes,
+                COUNT(DISTINCT CASE WHEN es_cliente_nuevo = 1 THEN id_usuario END) as nuevos,
+                COUNT(DISTINCT CASE WHEN es_cliente_nuevo = 0 THEN id_usuario END) as recurrentes
+            FROM (
+                SELECT 
+                    DATE_FORMAT(p.fecha_pedido, '%Y-%m') as mes,
+                    p.id_usuario,
+                    CASE 
+                        WHEN DATE_FORMAT(primera_compra.primera_fecha, '%Y-%m') = DATE_FORMAT(p.fecha_pedido, '%Y-%m') THEN 1
+                        ELSE 0
+                    END as es_cliente_nuevo
+                FROM pedidos p
+                JOIN (
+                    SELECT 
+                        id_usuario,
+                        MIN(fecha_pedido) as primera_fecha
+                    FROM pedidos
+                    GROUP BY id_usuario
+                ) as primera_compra ON p.id_usuario = primera_compra.id_usuario
+                WHERE DATE(p.fecha_pedido) BETWEEN ? AND ?
+            ) as clientes_clasificados
+            GROUP BY mes
+            ORDER BY mes
+        `, [startDate, endDate]);
+        
+        connection.release();
+        
+        // Formatear resultados
+        const formattedReport = monthlyReport.map(row => ({
+            mes: row.mes,
+            nuevos: parseInt(row.nuevos),
+            recurrentes: parseInt(row.recurrentes)
+        }));
+        
+        res.status(200).json(formattedReport);
+        
+    } catch (error) {
+        console.error('Error al obtener reporte de clientes nuevos vs recurrentes:', error);
+        res.status(500).json({
+            message: 'Error al obtener reporte de clientes nuevos vs recurrentes',
+            error: error.message
+        });
+    }
+};
+
+// Function to get customer frequency analysis report
+exports.getCustomerFrequencyReport = async (req, res) => {
+    try {
+        const { from, to } = req.query;
+        
+        if (!from || !to) {
+            return res.status(400).json({
+                message: 'Parámetros requeridos: from y to (formato ISO 8601)'
+            });
+        }
+        
+        const connection = await pool.promise().getConnection();
+        
+        // Convertir fechas ISO a formato MySQL
+        const startDate = new Date(from).toISOString().split('T')[0];
+        const endDate = new Date(to).toISOString().split('T')[0];
+          // Query para obtener estadísticas de frecuencia de clientes
+        const [frequencyReport] = await connection.query(`
+            SELECT 
+                rango_frecuencia as rango,
+                COUNT(*) as clientes,
+                ROUND((COUNT(*) * 100.0 / total_stats.total_clientes), 1) as pctClientes,
+                ROUND((SUM(total_gastado) * 100.0 / total_stats.total_ingresos), 1) as pctIngresos
+            FROM (
+                SELECT 
+                    p.id_usuario,
+                    COUNT(p.id_pedido) as total_pedidos,
+                    SUM(p.total) as total_gastado,
+                    CASE 
+                        WHEN COUNT(p.id_pedido) = 1 THEN '1 pedido'
+                        WHEN COUNT(p.id_pedido) BETWEEN 2 AND 3 THEN '2-3 pedidos'
+                        ELSE '4+ pedidos'
+                    END as rango_frecuencia
+                FROM pedidos p
+                WHERE DATE(p.fecha_pedido) BETWEEN ? AND ?
+                GROUP BY p.id_usuario
+            ) as customer_frequency
+            CROSS JOIN (
+                SELECT 
+                    COUNT(DISTINCT p.id_usuario) as total_clientes,
+                    SUM(p.total) as total_ingresos
+                FROM pedidos p
+                WHERE DATE(p.fecha_pedido) BETWEEN ? AND ?
+            ) as total_stats
+            GROUP BY rango_frecuencia, total_stats.total_clientes, total_stats.total_ingresos
+            ORDER BY 
+                CASE rango_frecuencia
+                    WHEN '1 pedido' THEN 1
+                    WHEN '2-3 pedidos' THEN 2
+                    ELSE 3
+                END
+        `, [startDate, endDate, startDate, endDate]);
+        
+        connection.release();
+        
+        // Formatear resultados
+        const formattedReport = frequencyReport.map(row => ({
+            rango: row.rango,
+            clientes: parseInt(row.clientes),
+            pctClientes: parseFloat(row.pctClientes),
+            pctIngresos: parseFloat(row.pctIngresos)
+        }));
+        
+        res.status(200).json(formattedReport);
+        
+    } catch (error) {
+        console.error('Error al obtener reporte de frecuencia de clientes:', error);
+        res.status(500).json({
+            message: 'Error al obtener reporte de frecuencia de clientes',
+            error: error.message
+        });
+    }
+};

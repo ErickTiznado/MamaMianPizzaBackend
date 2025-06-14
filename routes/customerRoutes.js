@@ -13,6 +13,9 @@ router.get('/growth-trends', customerController.getCustomerGrowthTrends);
 // Customer retention analysis
 router.get('/retention-metrics', customerController.getCustomerRetentionMetrics);
 
+// Detailed cohort retention analysis for heatmap visualization
+router.get('/cohort-retention-analysis', customerController.getCohortRetentionAnalysis);
+
 // Customer lifetime value analysis
 router.get('/lifetime-value', customerController.getCustomerLifetimeValue);
 
