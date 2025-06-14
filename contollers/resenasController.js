@@ -4,12 +4,27 @@ const pool = require('../config/db');
 exports.createResena = async (req, res) => {
     try {
         const { id_usuario, id_producto, comentario, valoracion } = req.body;
+          // Validate required fields
+        const missingFields = [];
+        const receivedData = { id_usuario, id_producto, comentario, valoracion };
         
-        // Validate required fields
-        if (!id_usuario || !id_producto || !comentario || !valoracion) {
+        if (!id_usuario) missingFields.push('id_usuario');
+        if (!id_producto) missingFields.push('id_producto');
+        if (!comentario) missingFields.push('comentario');
+        if (valoracion === undefined || valoracion === null || valoracion === '') missingFields.push('valoracion');
+        
+        if (missingFields.length > 0) {
             return res.status(400).json({
-                message: 'Todos los campos son requeridos',
-                campos_requeridos: ['id_usuario', 'id_producto', 'comentario', 'valoracion']
+                message: 'Faltan campos requeridos',
+                campos_faltantes: missingFields,
+                campos_recibidos: Object.keys(receivedData).filter(key => receivedData[key] !== undefined && receivedData[key] !== null && receivedData[key] !== ''),
+                datos_recibidos: receivedData,
+                ejemplo_correcto: {
+                    id_usuario: 1,
+                    id_producto: 5,
+                    comentario: "Pizza excelente, muy sabrosa!",
+                    valoracion: 5
+                }
             });
         }
         
