@@ -14,6 +14,7 @@ const orderRoutes = require('./routes/orderRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const tamanosRoutes = require('./routes/tamanosRoutes');
+const resenasRoutes = require('./routes/resenasRoutes');
 // Initialize express app
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -69,7 +70,8 @@ app.use('/api/inventory', inventoriRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/tamanos', tamanosRoutes );
+app.use('/api/tamanos', tamanosRoutes);
+app.use('/api/resenas', resenasRoutes);
 // Default route
 app.get('/', (req, res) => {
   res.send('Mama Mian Pizza API is running');
