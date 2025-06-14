@@ -1368,33 +1368,33 @@ exports.getNewVsRecurringCustomersReport = async (req, res) => {
         
         // Convertir fechas ISO a formato MySQL
         const startDate = new Date(from).toISOString().split('T')[0];
-        const endDate = new Date(to).toISOString().split('T')[0];
-          // Query para obtener clientes nuevos y recurrentes por mes
+        const endDate = new Date(to).toISOString().split('T')[0];          // Query para obtener clientes nuevos y recurrentes por mes
         const [monthlyReport] = await connection.query(`
             SELECT 
-                DATE_FORMAT(p.fecha_pedido, '%Y-%m') as mes,
-                SUM(CASE WHEN DATE_FORMAT(primera_compra.primera_fecha, '%Y-%m') = DATE_FORMAT(p.fecha_pedido, '%Y-%m') THEN 1 ELSE 0 END) as nuevos,
-                SUM(CASE WHEN DATE_FORMAT(primera_compra.primera_fecha, '%Y-%m') != DATE_FORMAT(p.fecha_pedido, '%Y-%m') THEN 1 ELSE 0 END) as recurrentes
+                mes,
+                COUNT(DISTINCT CASE WHEN es_cliente_nuevo = 1 THEN id_usuario END) as nuevos,
+                COUNT(DISTINCT CASE WHEN es_cliente_nuevo = 0 THEN id_usuario END) as recurrentes
             FROM (
-                SELECT DISTINCT
-                    DATE_FORMAT(p1.fecha_pedido, '%Y-%m') as mes,
-                    p1.id_usuario
-                FROM pedidos p1
-                WHERE DATE(p1.fecha_pedido) BETWEEN ? AND ?
-            ) as monthly_users
-            JOIN pedidos p ON monthly_users.id_usuario = p.id_usuario 
-                AND DATE_FORMAT(p.fecha_pedido, '%Y-%m') = monthly_users.mes
-            JOIN (
                 SELECT 
-                    id_usuario,
-                    MIN(fecha_pedido) as primera_fecha
-                FROM pedidos
-                GROUP BY id_usuario
-            ) as primera_compra ON p.id_usuario = primera_compra.id_usuario
-            WHERE DATE(p.fecha_pedido) BETWEEN ? AND ?
-            GROUP BY DATE_FORMAT(p.fecha_pedido, '%Y-%m')
+                    DATE_FORMAT(p.fecha_pedido, '%Y-%m') as mes,
+                    p.id_usuario,
+                    CASE 
+                        WHEN DATE_FORMAT(primera_compra.primera_fecha, '%Y-%m') = DATE_FORMAT(p.fecha_pedido, '%Y-%m') THEN 1
+                        ELSE 0
+                    END as es_cliente_nuevo
+                FROM pedidos p
+                JOIN (
+                    SELECT 
+                        id_usuario,
+                        MIN(fecha_pedido) as primera_fecha
+                    FROM pedidos
+                    GROUP BY id_usuario
+                ) as primera_compra ON p.id_usuario = primera_compra.id_usuario
+                WHERE DATE(p.fecha_pedido) BETWEEN ? AND ?
+            ) as clientes_clasificados
+            GROUP BY mes
             ORDER BY mes
-        `, [startDate, endDate, startDate, endDate]);
+        `, [startDate, endDate]);
         
         connection.release();
         
