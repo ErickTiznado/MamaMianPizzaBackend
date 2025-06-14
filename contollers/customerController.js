@@ -1009,3 +1009,112 @@ exports.getCustomerSatisfactionMetrics = async (req, res) => {
         });
     }
 };
+
+// Function to get all orders made by a specific user
+exports.getUserOrders = async (req, res) => {
+    const { userId } = req.params;
+    
+    if (!userId) {
+        return res.status(400).json({ message: 'ID de usuario requerido' });
+    }
+
+    try {
+        const connection = await pool.promise().getConnection();
+        
+        // First, verify if the user exists
+        const [userExists] = await connection.query(`
+            SELECT id_usuario, nombre, correo FROM usuarios WHERE id_usuario = ?
+        `, [userId]);
+        
+        if (userExists.length === 0) {
+            connection.release();
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+        
+        // Get all orders for the specific user with complete details
+        const [orders] = await connection.query(`
+            SELECT 
+                p.*,
+                u.nombre AS nombre_usuario,
+                u.correo AS correo_usuario,
+                d.direccion,
+                d.latitud,
+                d.longitud,
+                d.direccion_formateada
+            FROM 
+                pedidos p
+            LEFT JOIN 
+                usuarios u ON p.id_usuario = u.id_usuario
+            LEFT JOIN 
+                direcciones d ON p.id_direccion = d.id_direccion
+            WHERE 
+                p.id_usuario = ?
+            ORDER BY 
+                p.fecha_pedido DESC
+        `, [userId]);
+
+        // For each order, get product details
+        for (const order of orders) {
+            const [detalles] = await connection.query(`
+                SELECT 
+                    dp.*,
+                    pr.titulo AS nombre_producto_original,
+                    pr.descripcion,
+                    pr.imagen_url
+                FROM 
+                    detalle_pedidos dp
+                LEFT JOIN
+                    productos pr ON dp.id_producto = pr.id_producto
+                WHERE 
+                    dp.id_pedido = ?
+            `, [order.id_pedido]);
+            
+            order.detalles = detalles;
+        }
+        
+        // Calculate order statistics for this user
+        const [orderStats] = await connection.query(`
+            SELECT 
+                COUNT(*) as total_pedidos,
+                SUM(total) as total_gastado,
+                AVG(total) as promedio_pedido,
+                MIN(fecha_pedido) as primer_pedido,
+                MAX(fecha_pedido) as ultimo_pedido,
+                MIN(total) as pedido_minimo,
+                MAX(total) as pedido_maximo
+            FROM pedidos 
+            WHERE id_usuario = ?
+        `, [userId]);
+        
+        connection.release();
+        
+        const userInfo = userExists[0];
+        const stats = orderStats[0];
+        
+        res.status(200).json({
+            message: 'Pedidos del usuario obtenidos exitosamente',
+            usuario: {
+                id: userInfo.id_usuario,
+                nombre: userInfo.nombre,
+                correo: userInfo.correo
+            },
+            estadisticas: {
+                totalPedidos: parseInt(stats.total_pedidos || 0),
+                totalGastado: parseFloat(stats.total_gastado || 0).toFixed(2),
+                promedioPedido: parseFloat(stats.promedio_pedido || 0).toFixed(2),
+                primerPedido: stats.primer_pedido,
+                ultimoPedido: stats.ultimo_pedido,
+                pedidoMinimo: parseFloat(stats.pedido_minimo || 0).toFixed(2),
+                pedidoMaximo: parseFloat(stats.pedido_maximo || 0).toFixed(2)
+            },
+            pedidos: orders
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener pedidos del usuario:', error);
+        res.status(500).json({ 
+            message: 'Error al obtener pedidos del usuario', 
+            error: error.message 
+        });
+    }
+};

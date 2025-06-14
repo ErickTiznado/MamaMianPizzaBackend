@@ -22,4 +22,7 @@ router.get('/demographics', customerController.getCustomerDemographicsAndPrefere
 // Customer satisfaction metrics
 router.get('/satisfaction-metrics', customerController.getCustomerSatisfactionMetrics);
 
+// Get all orders for a specific user
+router.get('/:userId/orders', customerController.getUserOrders);
+
 module.exports = router;
