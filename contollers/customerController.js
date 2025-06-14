@@ -1051,16 +1051,13 @@ exports.getUserOrders = async (req, res) => {
                 p.id_usuario = ?
             ORDER BY 
                 p.fecha_pedido DESC
-        `, [userId]);
-
-        // For each order, get product details
+        `, [userId]);        // For each order, get product details
         for (const order of orders) {
             const [detalles] = await connection.query(`
                 SELECT 
                     dp.*,
                     pr.titulo AS nombre_producto_original,
-                    pr.descripcion,
-                    pr.imagen_url
+                    pr.descripcion
                 FROM 
                     detalle_pedidos dp
                 LEFT JOIN
