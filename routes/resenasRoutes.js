@@ -5,6 +5,9 @@ const resenasController = require('../contollers/resenasController');
 // Create a new review
 router.post('/', resenasController.createResena);
 
+// Get all reviews with user information
+router.get('/', resenasController.getAllResenas);
+
 // Get all reviews for a specific product
 router.get('/producto/:id_producto', resenasController.getResenasByProduct);
 

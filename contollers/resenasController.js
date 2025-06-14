@@ -270,3 +270,78 @@ exports.getResenasByUser = async (req, res) => {
         });
     }
 };
+
+// Function to get all reviews with user information
+exports.getAllResenas = async (req, res) => {
+    try {
+        const connection = await pool.promise().getConnection();
+        
+        try {
+            // Get all reviews with user and product information
+            const [reviews] = await connection.query(`
+                SELECT 
+                    r.id_resena,
+                    r.id_usuario,
+                    r.id_producto,
+                    r.comentario,
+                    r.valoracion,
+                    r.fecha_creacion,
+                    u.nombre as nombre_usuario,
+                    p.titulo as nombre_producto
+                FROM resenas r
+                JOIN usuarios u ON r.id_usuario = u.id_usuario
+                JOIN productos p ON r.id_producto = p.id_producto
+                ORDER BY r.fecha_creacion DESC
+            `);
+            
+            // Get summary statistics
+            const [stats] = await connection.query(`
+                SELECT 
+                    COUNT(*) as total_resenas,
+                    AVG(valoracion) as valoracion_promedio,
+                    COUNT(DISTINCT id_usuario) as usuarios_activos,
+                    COUNT(DISTINCT id_producto) as productos_resenados,
+                    MIN(fecha_creacion) as primera_resena,
+                    MAX(fecha_creacion) as ultima_resena
+                FROM resenas
+            `);
+            
+            res.status(200).json({
+                message: 'Todas las reseñas obtenidas exitosamente',
+                estadisticas: {
+                    total_resenas: parseInt(stats[0].total_resenas || 0),
+                    valoracion_promedio: parseFloat(stats[0].valoracion_promedio || 0).toFixed(1),
+                    usuarios_activos: parseInt(stats[0].usuarios_activos || 0),
+                    productos_resenados: parseInt(stats[0].productos_resenados || 0),
+                    primera_resena: stats[0].primera_resena,
+                    ultima_resena: stats[0].ultima_resena
+                },
+                resenas: reviews.map(review => ({
+                    id_resena: review.id_resena,
+                    usuario: {
+                        id: review.id_usuario,
+                        nombre: review.nombre_usuario,
+                        fecha_resena: review.fecha_creacion
+                    },
+                    producto: {
+                        id: review.id_producto,
+                        nombre: review.nombre_producto
+                    },
+                    comentario: review.comentario,
+                    valoracion: review.valoracion,
+                    fecha_creacion: review.fecha_creacion
+                }))
+            });
+            
+        } finally {
+            connection.release();
+        }
+        
+    } catch (error) {
+        console.error('Error al obtener todas las reseñas:', error);
+        res.status(500).json({
+            message: 'Error interno del servidor al obtener las reseñas',
+            error: error.message
+        });
+    }
+};
