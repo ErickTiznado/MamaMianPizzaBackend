@@ -570,25 +570,181 @@ exports.createOrder = async (req, res) => {
             total,
             aceptado_terminos,
             tiempo_estimado_entrega
-        } = req.body;
-
-        // Validate required fields
-        if (!tipo_cliente || !cliente || !direccion || !metodo_pago || !productos || !total) {
-            return res.status(400).json({ message: 'Faltan datos requeridos para el pedido' });
+        } = req.body;        // ENHANCED VALIDATION WITH SPECIFIC ERROR MESSAGES
+        const errors = [];
+        const missingFields = [];
+        
+        // Validate main required fields
+        if (!tipo_cliente) missingFields.push('tipo_cliente');
+        if (!cliente) missingFields.push('cliente');
+        if (!direccion) missingFields.push('direccion');
+        if (!metodo_pago) missingFields.push('metodo_pago');
+        if (!productos) missingFields.push('productos');
+        if (!total) missingFields.push('total');
+        
+        if (missingFields.length > 0) {
+            return res.status(400).json({ 
+                message: 'Faltan datos requeridos para el pedido',
+                detalle: `Campos faltantes: ${missingFields.join(', ')}`,
+                campos_requeridos: {
+                    tipo_cliente: 'Tipo de cliente (registrado/invitado)',
+                    cliente: 'Información del cliente',
+                    direccion: 'Dirección de entrega',
+                    metodo_pago: 'Método de pago',
+                    productos: 'Lista de productos',
+                    total: 'Total del pedido'
+                },
+                campos_faltantes: missingFields
+            });
         }
 
-        if (!Array.isArray(productos) || productos.length === 0) {
-            return res.status(400).json({ message: 'El pedido debe contener al menos un producto' });
-        }
-
-        // Validar estructura de cada producto
-        for (const producto of productos) {
-            if (!producto.nombre_producto || !producto.cantidad || !producto.precio_unitario) {
-                return res.status(400).json({ 
-                    message: 'Datos de producto incompletos', 
-                    detalle: 'Cada producto debe incluir nombre_producto, cantidad y precio_unitario' 
+        // Validate client data based on client type
+        if (cliente) {
+            const clienteErrors = [];
+            
+            if (tipo_cliente === 'registrado') {
+                if (!cliente.email) clienteErrors.push('email');
+                if (!cliente.password) clienteErrors.push('password');
+            }
+            
+            // Common client validations for both types
+            if (!cliente.nombre) clienteErrors.push('nombre');
+            if (!cliente.telefono) clienteErrors.push('telefono');
+            
+            if (clienteErrors.length > 0) {
+                return res.status(400).json({
+                    message: 'Faltan datos del cliente',
+                    detalle: `Campos del cliente faltantes: ${clienteErrors.join(', ')}`,
+                    tipo_cliente: tipo_cliente,
+                    campos_cliente_requeridos: tipo_cliente === 'registrado' 
+                        ? ['nombre', 'telefono', 'email', 'password']
+                        : ['nombre', 'telefono'],
+                    campos_cliente_faltantes: clienteErrors
                 });
             }
+        }
+
+        // Validate address data
+        if (direccion) {
+            const direccionErrors = [];
+            
+            if (direccion.tipo_direccion === 'formulario') {
+                if (!direccion.direccion) direccionErrors.push('direccion');
+                if (!direccion.pais) direccionErrors.push('pais');
+                if (!direccion.departamento) direccionErrors.push('departamento');
+                if (!direccion.municipio) direccionErrors.push('municipio');
+            } else if (direccion.tipo_direccion === 'tiempo_real') {
+                if (!direccion.latitud) direccionErrors.push('latitud');
+                if (!direccion.longitud) direccionErrors.push('longitud');
+                if (!direccion.direccion_formateada) direccionErrors.push('direccion_formateada');
+            } else {
+                direccionErrors.push('tipo_direccion (debe ser "formulario" o "tiempo_real")');
+            }
+            
+            if (direccionErrors.length > 0) {
+                return res.status(400).json({
+                    message: 'Faltan datos de dirección',
+                    detalle: `Campos de dirección faltantes: ${direccionErrors.join(', ')}`,
+                    tipo_direccion: direccion.tipo_direccion,
+                    campos_direccion_requeridos: direccion.tipo_direccion === 'formulario' 
+                        ? ['direccion', 'pais', 'departamento', 'municipio']
+                        : ['latitud', 'longitud', 'direccion_formateada'],
+                    campos_direccion_faltantes: direccionErrors
+                });
+            }
+        }
+
+        // Validate products array
+        if (!Array.isArray(productos) || productos.length === 0) {
+            return res.status(400).json({ 
+                message: 'El pedido debe contener al menos un producto',
+                detalle: 'El campo "productos" debe ser un array con al menos un elemento',
+                ejemplo_producto: {
+                    nombre_producto: 'Pizza Margarita',
+                    cantidad: 1,
+                    precio_unitario: 12.50,
+                    subtotal: 12.50,
+                    masa: 'tradicional',
+                    tamano: 'mediana',
+                    instrucciones_especiales: 'Sin cebolla'
+                }
+            });
+        }
+
+        // Validate each product structure
+        const productErrors = [];
+        productos.forEach((producto, index) => {
+            const productoErrors = [];
+            
+            if (!producto.nombre_producto) productoErrors.push('nombre_producto');
+            if (!producto.cantidad || producto.cantidad <= 0) productoErrors.push('cantidad (debe ser mayor a 0)');
+            if (!producto.precio_unitario || producto.precio_unitario <= 0) productoErrors.push('precio_unitario (debe ser mayor a 0)');
+            
+            if (productoErrors.length > 0) {
+                productErrors.push({
+                    indice: index,
+                    producto: producto.nombre_producto || 'Sin nombre',
+                    campos_faltantes: productoErrors
+                });
+            }
+        });
+
+        if (productErrors.length > 0) {
+            return res.status(400).json({ 
+                message: 'Datos de productos incompletos',
+                detalle: 'Uno o más productos tienen datos faltantes o inválidos',
+                productos_con_errores: productErrors,
+                campos_producto_requeridos: ['nombre_producto', 'cantidad', 'precio_unitario'],
+                ejemplo_producto_valido: {
+                    nombre_producto: 'Pizza Margarita',
+                    cantidad: 1,
+                    precio_unitario: 12.50,
+                    subtotal: 12.50
+                }
+            });
+        }
+
+        // Validate payment method
+        const metodosValidos = ['efectivo', 'tarjeta', 'transferencia'];
+        if (!metodosValidos.includes(metodo_pago)) {
+            return res.status(400).json({
+                message: 'Método de pago inválido',
+                detalle: `El método de pago "${metodo_pago}" no es válido`,
+                metodos_validos: metodosValidos
+            });
+        }
+
+        // Validate payment method specific fields
+        if (metodo_pago === 'tarjeta') {
+            const tarjetaErrors = [];
+            if (!req.body.num_tarjeta_masked) tarjetaErrors.push('num_tarjeta_masked');
+            if (!req.body.nombre_tarjeta) tarjetaErrors.push('nombre_tarjeta');
+            
+            if (tarjetaErrors.length > 0) {
+                return res.status(400).json({
+                    message: 'Faltan datos de tarjeta',
+                    detalle: `Para pagos con tarjeta se requieren: ${tarjetaErrors.join(', ')}`,
+                    campos_tarjeta_requeridos: ['num_tarjeta_masked', 'nombre_tarjeta'],
+                    campos_tarjeta_faltantes: tarjetaErrors
+                });
+            }
+        }
+
+        // Validate numeric fields
+        if (isNaN(total) || total <= 0) {
+            return res.status(400).json({
+                message: 'Total inválido',
+                detalle: 'El total debe ser un número mayor a 0',
+                valor_recibido: total
+            });
+        }
+
+        if (subtotal && (isNaN(subtotal) || subtotal <= 0)) {
+            return res.status(400).json({
+                message: 'Subtotal inválido',
+                detalle: 'El subtotal debe ser un número mayor a 0',
+                valor_recibido: subtotal
+            });
         }
 
         // Generate unique order code
