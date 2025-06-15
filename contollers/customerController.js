@@ -1489,3 +1489,85 @@ exports.getCustomerFrequencyReport = async (req, res) => {
         });
     }
 };
+
+
+
+// Function to get all customers with their detailed information
+exports.getAllCustomersDetailed = async (req, res) => {
+    try {
+        const connection = await pool.promise().getConnection();
+          // Get all customers with order counts, total spent, last order date, and average rating
+        const [customers] = await connection.query(`
+            SELECT 
+                u.id_usuario,
+                u.nombre,
+                u.correo,
+                u.celular,
+                MIN(p.fecha_pedido) as fecha_primer_pedido,
+                COUNT(p.id_pedido) as total_pedidos,
+                SUM(p.total) as total_gastado,
+                MAX(p.fecha_pedido) as ultimo_pedido,
+                (SELECT AVG(r.valoracion) 
+                 FROM resenas r 
+                 WHERE r.id_usuario = u.id_usuario) as valoracion_promedio
+            FROM usuarios u
+            LEFT JOIN pedidos p ON u.id_usuario = p.id_usuario
+            GROUP BY u.id_usuario, u.nombre, u.correo, u.celular
+            ORDER BY total_pedidos DESC
+        `);
+        
+        // Format the results to match the table structure
+        const formattedCustomers = customers.map(customer => {
+            const totalOrders = parseInt(customer.total_pedidos) || 0;
+            const totalSpent = parseFloat(customer.total_gastado || 0).toFixed(2);
+            const avgRating = customer.valoracion_promedio ? parseFloat(customer.valoracion_promedio).toFixed(1) : null;
+            const lastOrderDate = customer.ultimo_pedido ? new Date(customer.ultimo_pedido).toISOString().split('T')[0] : null;
+              // Calculate client since date based on first order date
+            const clienteDesde = customer.fecha_primer_pedido ? 
+                `Cliente desde ${new Date(customer.fecha_primer_pedido).toISOString().split('T')[0]}` : 
+                'Nuevo cliente';
+            
+            // Determine if the customer is active based on having orders in the last 90 days
+            let isActive = false;
+            if (customer.ultimo_pedido) {
+                const lastOrder = new Date(customer.ultimo_pedido);
+                const now = new Date();
+                const daysSinceLastOrder = Math.floor((now - lastOrder) / (1000 * 60 * 60 * 24));
+                isActive = daysSinceLastOrder <= 90;
+            }
+            
+            // Determine if the customer is a VIP (has more than 10 orders)
+            const isVip = totalOrders >= 10;
+            
+            return {
+                cliente: customer.nombre,
+                contacto: {
+                    correo: customer.correo,
+                    telefono: customer.celular
+                },
+                pedidos: totalOrders,
+                totalGastado: totalSpent,
+                ultimoPedido: lastOrderDate,
+                valoracion: avgRating ? parseFloat(avgRating) : null,
+                estado: isActive ? 'Activo' : 'Inactivo',
+                esVIP: isVip,
+                id: customer.id_usuario,
+                clienteDesde: clienteDesde
+            };
+        });
+        
+        connection.release();
+        
+        res.status(200).json({
+            message: 'Datos de clientes obtenidos exitosamente',
+            clientes: formattedCustomers
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener datos de clientes:', error);
+        res.status(500).json({
+            message: 'Error al obtener datos de clientes',
+            error: error.message
+        });
+    }
+};

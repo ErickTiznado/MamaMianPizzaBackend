@@ -28,4 +28,7 @@ router.get('/satisfaction-metrics', customerController.getCustomerSatisfactionMe
 // Get all orders for a specific user
 router.get('/:userId/orders', customerController.getUserOrders);
 
+// Get all customers with detailed information
+router.get('/all', customerController.getAllCustomersDetailed);
+
 module.exports = router;
