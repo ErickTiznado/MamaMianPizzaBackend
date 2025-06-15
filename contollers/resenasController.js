@@ -345,3 +345,254 @@ exports.getAllResenas = async (req, res) => {
         });
     }
 };
+
+// Function to toggle review approval status (active/inactive)
+exports.toggleResenaApproval = async (req, res) => {
+    try {
+        const { id_resena } = req.params;
+        const { aprobada } = req.body;
+        
+        // Validate required fields
+        if (!id_resena) {
+            return res.status(400).json({
+                message: 'ID de reseña requerido'
+            });
+        }
+        
+        if (aprobada === undefined || aprobada === null) {
+            return res.status(400).json({
+                message: 'Estado de aprobación requerido',
+                ejemplo: {
+                    aprobada: 1, // 1 para aprobada/activa, 0 para no aprobada/inactiva
+                }
+            });
+        }
+        
+        // Validate data types
+        if (!Number.isInteger(parseInt(id_resena))) {
+            return res.status(400).json({
+                message: 'id_resena debe ser un número entero'
+            });
+        }
+        
+        // Validate approval status (0 or 1)
+        const approvalStatus = parseInt(aprobada);
+        if (![0, 1].includes(approvalStatus)) {
+            return res.status(400).json({
+                message: 'El estado de aprobación debe ser 0 (inactiva) o 1 (activa)'
+            });
+        }
+        
+        const connection = await pool.promise().getConnection();
+        
+        try {
+            // Check if review exists
+            const [reviewExists] = await connection.query(
+                'SELECT id_resena, aprobada FROM resenas WHERE id_resena = ?',
+                [id_resena]
+            );
+            
+            if (reviewExists.length === 0) {
+                return res.status(404).json({
+                    message: 'Reseña no encontrada'
+                });
+            }
+            
+            const currentStatus = reviewExists[0].aprobada;
+            
+            // Update review approval status
+            await connection.query(`
+                UPDATE resenas 
+                SET aprobada = ? 
+                WHERE id_resena = ?
+            `, [approvalStatus, id_resena]);
+            
+            // Get updated review with additional info
+            const [updatedReview] = await connection.query(`
+                SELECT 
+                    r.*,
+                    u.nombre as nombre_usuario,
+                    p.titulo as nombre_producto
+                FROM resenas r
+                JOIN usuarios u ON r.id_usuario = u.id_usuario
+                JOIN productos p ON r.id_producto = p.id_producto
+                WHERE r.id_resena = ?
+            `, [id_resena]);
+            
+            const statusText = approvalStatus === 1 ? 'aprobada/activa' : 'no aprobada/inactiva';
+            const actionText = currentStatus !== approvalStatus ? 'actualizado' : 'mantenido';
+            
+            res.status(200).json({
+                message: `Estado de reseña ${actionText} exitosamente`,
+                resena: {
+                    id_resena: updatedReview[0].id_resena,
+                    id_usuario: updatedReview[0].id_usuario,
+                    nombre_usuario: updatedReview[0].nombre_usuario,
+                    id_producto: updatedReview[0].id_producto,
+                    nombre_producto: updatedReview[0].nombre_producto,
+                    comentario: updatedReview[0].comentario,
+                    valoracion: updatedReview[0].valoracion,
+                    aprobada: updatedReview[0].aprobada,
+                    estado: statusText,
+                    fecha_creacion: updatedReview[0].fecha_creacion
+                }
+            });
+            
+        } finally {
+            connection.release();
+        }
+        
+    } catch (error) {
+        console.error('Error al cambiar estado de reseña:', error);
+        res.status(500).json({
+            message: 'Error interno del servidor al cambiar el estado de la reseña',
+            error: error.message
+        });
+    }
+};
+
+// Function to delete a review
+exports.deleteResena = async (req, res) => {
+    try {
+        const { id_resena } = req.params;
+        
+        // Validate required fields
+        if (!id_resena) {
+            return res.status(400).json({
+                message: 'ID de reseña requerido'
+            });
+        }
+        
+        // Validate data types
+        if (!Number.isInteger(parseInt(id_resena))) {
+            return res.status(400).json({
+                message: 'id_resena debe ser un número entero'
+            });
+        }
+        
+        const connection = await pool.promise().getConnection();
+        
+        try {
+            // Check if review exists and get info before deletion
+            const [reviewToDelete] = await connection.query(`
+                SELECT 
+                    r.*,
+                    u.nombre as nombre_usuario,
+                    p.titulo as nombre_producto
+                FROM resenas r
+                JOIN usuarios u ON r.id_usuario = u.id_usuario
+                JOIN productos p ON r.id_producto = p.id_producto
+                WHERE r.id_resena = ?
+            `, [id_resena]);
+            
+            if (reviewToDelete.length === 0) {
+                return res.status(404).json({
+                    message: 'Reseña no encontrada'
+                });
+            }
+            
+            // Delete the review
+            const [deleteResult] = await connection.query(
+                'DELETE FROM resenas WHERE id_resena = ?',
+                [id_resena]
+            );
+            
+            if (deleteResult.affectedRows === 0) {
+                return res.status(404).json({
+                    message: 'No se pudo eliminar la reseña'
+                });
+            }
+            
+            res.status(200).json({
+                message: 'Reseña eliminada exitosamente',
+                resena_eliminada: {
+                    id_resena: reviewToDelete[0].id_resena,
+                    nombre_usuario: reviewToDelete[0].nombre_usuario,
+                    nombre_producto: reviewToDelete[0].nombre_producto,
+                    comentario: reviewToDelete[0].comentario,
+                    valoracion: reviewToDelete[0].valoracion,
+                    fecha_creacion: reviewToDelete[0].fecha_creacion
+                }
+            });
+            
+        } finally {
+            connection.release();
+        }
+        
+    } catch (error) {
+        console.error('Error al eliminar reseña:', error);
+        res.status(500).json({
+            message: 'Error interno del servidor al eliminar la reseña',
+            error: error.message
+        });
+    }
+};
+
+// Function to get reviews by approval status
+exports.getResenasByApprovalStatus = async (req, res) => {
+    try {
+        const { aprobada } = req.params;
+        
+        // Validate approval status
+        const approvalStatus = parseInt(aprobada);
+        if (![0, 1].includes(approvalStatus)) {
+            return res.status(400).json({
+                message: 'Estado de aprobación inválido. Debe ser 0 (no aprobadas) o 1 (aprobadas)'
+            });
+        }
+        
+        const connection = await pool.promise().getConnection();
+        
+        try {
+            // Get reviews by approval status
+            const [reviews] = await connection.query(`
+                SELECT 
+                    r.*,
+                    u.nombre as nombre_usuario,
+                    p.titulo as nombre_producto
+                FROM resenas r
+                JOIN usuarios u ON r.id_usuario = u.id_usuario
+                JOIN productos p ON r.id_producto = p.id_producto
+                WHERE r.aprobada = ?
+                ORDER BY r.fecha_creacion DESC
+            `, [approvalStatus]);
+            
+            const statusText = approvalStatus === 1 ? 'aprobadas' : 'no aprobadas';
+            
+            res.status(200).json({
+                message: `Reseñas ${statusText} obtenidas exitosamente`,
+                estado_filtro: {
+                    codigo: approvalStatus,
+                    descripcion: statusText
+                },
+                total_resenas: reviews.length,
+                resenas: reviews.map(review => ({
+                    id_resena: review.id_resena,
+                    usuario: {
+                        id: review.id_usuario,
+                        nombre: review.nombre_usuario
+                    },
+                    producto: {
+                        id: review.id_producto,
+                        nombre: review.nombre_producto
+                    },
+                    comentario: review.comentario,
+                    valoracion: review.valoracion,
+                    aprobada: review.aprobada,
+                    estado: statusText,
+                    fecha_creacion: review.fecha_creacion
+                }))
+            });
+            
+        } finally {
+            connection.release();
+        }
+        
+    } catch (error) {
+        console.error('Error al obtener reseñas por estado:', error);
+        res.status(500).json({
+            message: 'Error interno del servidor al obtener las reseñas por estado',
+            error: error.message
+        });
+    }
+};
