@@ -7,6 +7,9 @@ const customerController = require('../contollers/customerController');
 // Basic customer metrics
 router.get('/unique-customers', customerController.getUniqueCustomersServed);
 
+// Get all customers with detailed information
+router.get('/all', customerController.getAllCustomersDetailed);
+
 // Customer growth and trends
 router.get('/growth-trends', customerController.getCustomerGrowthTrends);
 
