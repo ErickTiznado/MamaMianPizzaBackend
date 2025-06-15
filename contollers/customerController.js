@@ -1538,8 +1538,7 @@ exports.getAllCustomersDetailed = async (req, res) => {
             
             // Determine if the customer is a VIP (has more than 10 orders)
             const isVip = totalOrders >= 10;
-            
-            // Get customer reviews with product information
+              // Get customer reviews with product information
             const [reviews] = await connection.query(`
                 SELECT 
                     r.id_resena,
@@ -1549,15 +1548,13 @@ exports.getAllCustomersDetailed = async (req, res) => {
                     r.fecha_creacion,
                     p.titulo as nombre_producto,
                     p.descripcion as descripcion_producto,
-                    p.precio as precio_producto,
                     p.imagen as imagen_producto
                 FROM resenas r
                 JOIN productos p ON r.id_producto = p.id_producto
                 WHERE r.id_usuario = ?
                 ORDER BY r.fecha_creacion DESC
             `, [customer.id_usuario]);
-            
-            // Format reviews
+              // Format reviews
             const formattedReviews = reviews.map(review => ({
                 id: review.id_resena,
                 comentario: review.comentario,
@@ -1567,7 +1564,6 @@ exports.getAllCustomersDetailed = async (req, res) => {
                     id: review.id_producto,
                     nombre: review.nombre_producto,
                     descripcion: review.descripcion_producto,
-                    precio: parseFloat(review.precio_producto || 0).toFixed(2),
                     imagen: review.imagen_producto
                 }
             }));
