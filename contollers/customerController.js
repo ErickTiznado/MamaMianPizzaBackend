@@ -465,15 +465,14 @@ exports.getCustomerRetentionMetrics = async (req, res) => {
 exports.getAllCustomersDetailed = async (req, res) => {
     try {
         const connection = await pool.promise().getConnection();
-        
-        // Get all customers with order counts, total spent, last order date, and average rating
+          // Get all customers with order counts, total spent, last order date, and average rating
         const [customers] = await connection.query(`
             SELECT 
                 u.id_usuario,
                 u.nombre,
                 u.correo,
                 u.celular,
-                DATE_FORMAT(u.fecha_registro, '%Y-%m-%d') as fecha_registro,
+                MIN(p.fecha_pedido) as fecha_primer_pedido,
                 COUNT(p.id_pedido) as total_pedidos,
                 SUM(p.total) as total_gastado,
                 MAX(p.fecha_pedido) as ultimo_pedido,
@@ -482,7 +481,7 @@ exports.getAllCustomersDetailed = async (req, res) => {
                  WHERE r.id_usuario = u.id_usuario) as valoracion_promedio
             FROM usuarios u
             LEFT JOIN pedidos p ON u.id_usuario = p.id_usuario
-            GROUP BY u.id_usuario, u.nombre, u.correo, u.celular, u.fecha_registro
+            GROUP BY u.id_usuario, u.nombre, u.correo, u.celular
             ORDER BY total_pedidos DESC
         `);
         
@@ -492,10 +491,9 @@ exports.getAllCustomersDetailed = async (req, res) => {
             const totalSpent = parseFloat(customer.total_gastado || 0).toFixed(2);
             const avgRating = customer.valoracion_promedio ? parseFloat(customer.valoracion_promedio).toFixed(1) : null;
             const lastOrderDate = customer.ultimo_pedido ? new Date(customer.ultimo_pedido).toISOString().split('T')[0] : null;
-            
-            // Calculate client since date in the format "Cliente desde YYYY-MM-DD"
-            const clienteDesde = customer.fecha_registro ? 
-                `Cliente desde ${customer.fecha_registro}` : 
+              // Calculate client since date based on first order date
+            const clienteDesde = customer.fecha_primer_pedido ? 
+                `Cliente desde ${new Date(customer.fecha_primer_pedido).toISOString().split('T')[0]}` : 
                 'Nuevo cliente';
             
             // Determine if the customer is active based on having orders in the last 90 days
