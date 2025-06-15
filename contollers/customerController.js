@@ -1517,7 +1517,7 @@ exports.getAllCustomersDetailed = async (req, res) => {
         `);
         
         // Format the results to match the table structure
-        const formattedCustomers = customers.map(customer => {
+        const formattedCustomers = await Promise.all(customers.map(async (customer) => {
             const totalOrders = parseInt(customer.total_pedidos) || 0;
             const totalSpent = parseFloat(customer.total_gastado || 0).toFixed(2);
             const avgRating = customer.valoracion_promedio ? parseFloat(customer.valoracion_promedio).toFixed(1) : null;
@@ -1539,6 +1539,39 @@ exports.getAllCustomersDetailed = async (req, res) => {
             // Determine if the customer is a VIP (has more than 10 orders)
             const isVip = totalOrders >= 10;
             
+            // Get customer reviews with product information
+            const [reviews] = await connection.query(`
+                SELECT 
+                    r.id_resena,
+                    r.id_producto,
+                    r.comentario,
+                    r.valoracion,
+                    r.fecha_creacion,
+                    p.titulo as nombre_producto,
+                    p.descripcion as descripcion_producto,
+                    p.precio as precio_producto,
+                    p.imagen as imagen_producto
+                FROM resenas r
+                JOIN productos p ON r.id_producto = p.id_producto
+                WHERE r.id_usuario = ?
+                ORDER BY r.fecha_creacion DESC
+            `, [customer.id_usuario]);
+            
+            // Format reviews
+            const formattedReviews = reviews.map(review => ({
+                id: review.id_resena,
+                comentario: review.comentario,
+                valoracion: review.valoracion,
+                fecha: new Date(review.fecha_creacion).toISOString().split('T')[0],
+                producto: {
+                    id: review.id_producto,
+                    nombre: review.nombre_producto,
+                    descripcion: review.descripcion_producto,
+                    precio: parseFloat(review.precio_producto || 0).toFixed(2),
+                    imagen: review.imagen_producto
+                }
+            }));
+            
             return {
                 cliente: customer.nombre,
                 contacto: {
@@ -1552,15 +1585,49 @@ exports.getAllCustomersDetailed = async (req, res) => {
                 estado: isActive ? 'Activo' : 'Inactivo',
                 esVIP: isVip,
                 id: customer.id_usuario,
-                clienteDesde: clienteDesde
+                clienteDesde: clienteDesde,
+                resenas: formattedReviews
             };
-        });
+        }));        // Calculate statistics
+        const totalCustomers = formattedCustomers.length;
+        const activeCustomers = formattedCustomers.filter(c => c.estado === 'Activo').length;
+        const vipCustomers = formattedCustomers.filter(c => c.esVIP).length;
+        const totalSpentOverall = formattedCustomers.reduce((sum, c) => sum + parseFloat(c.totalGastado), 0);
+        const avgSpentPerCustomer = totalCustomers > 0 ? (totalSpentOverall / totalCustomers).toFixed(2) : '0.00';
+        const totalOrders = formattedCustomers.reduce((sum, c) => sum + c.pedidos, 0);
+        const customersWithReviews = formattedCustomers.filter(c => c.resenas.length > 0).length;
+        const totalReviews = formattedCustomers.reduce((sum, c) => sum + c.resenas.length, 0);
         
+        // Restructure customer data to separate order statistics from reviews
+        const customerData = formattedCustomers.map(customer => ({
+            id: customer.id,
+            cliente: customer.cliente,
+            contacto: customer.contacto,
+            pedidos: customer.pedidos,
+            totalGastado: customer.totalGastado,
+            ultimoPedido: customer.ultimoPedido,
+            valoracion: customer.valoracion,
+            estado: customer.estado,
+            esVIP: customer.esVIP,
+            clienteDesde: customer.clienteDesde,
+            resenas: customer.resenas // Reviews/comments section
+        }));
+
         connection.release();
         
         res.status(200).json({
             message: 'Datos de clientes obtenidos exitosamente',
-            clientes: formattedCustomers
+            estadisticas: {
+                totalClientes: totalCustomers,
+                clientesActivos: activeCustomers,
+                clientesVIP: vipCustomers,
+                gastoTotalGeneral: totalSpentOverall.toFixed(2),
+                gastoPromedioCliente: avgSpentPerCustomer,
+                pedidosTotales: totalOrders,
+                clientesConResenas: customersWithReviews,
+                totalResenas: totalReviews
+            },
+            clientes: customerData
         });
         
     } catch (error) {
