@@ -551,6 +551,18 @@ exports.getOrderAverages = async (req, res) => {
 
 
 // Function to create a new order
+/**
+ * Creates a new order with proper guest user handling
+ * 
+ * MODIFICATIONS MADE:
+ * 1. Guest users are now saved ONLY to usuarios_invitados table (no duplicate entries in usuarios table)
+ * 2. Addresses for guest users are linked directly to id_usuario_invitado
+ * 3. Product creation is disabled - orders can only use existing products from the database
+ * 4. If a product doesn't exist, the order detail is skipped and an error is reported
+ * 
+ * @param {Object} req - Request object containing order data
+ * @param {Object} res - Response object
+ */
 exports.createOrder = async (req, res) => {
     // Start a transaction
     let connection;
@@ -788,8 +800,7 @@ exports.createOrder = async (req, res) => {
                     [id_usuario, 'tiempo_real', direccion.latitud, direccion.longitud, direccion.precision_ubicacion, direccion.direccion_formateada]
                 );
                 id_direccion = addressResult.insertId;
-            }
-        } else {
+            }        } else {
             // Para clientes invitados, guardamos en la tabla usuarios_invitados
             // Verificamos si ya existe un usuario invitado con ese número celular
             const [existingGuests] = await connection.query(
@@ -816,25 +827,19 @@ exports.createOrder = async (req, res) => {
                 id_usuario_invitado = guestResult.insertId;
             }
 
-            // Para resolver el problema con el id_usuario null, primero necesitamos 
-            // crear un usuario básico que tenga id_usuario para asociarlo a las direcciones
-            const [guestUserResult] = await connection.query(
-                'INSERT INTO usuarios (nombre, correo, contrasena, celular) VALUES (?, ?, ?, ?)',
-                [cliente.nombre, cliente.email || `invitado_${Date.now()}@mamamianpizza.com`, bcrypt.hashSync(Math.random().toString(36).substring(2), 5), cliente.telefono]
-            );
-            id_usuario = guestUserResult.insertId;
-
-            // Creamos la dirección asociada al usuario
+            // Para usuarios invitados, NO necesitamos crear un registro en la tabla usuarios
+            // La dirección se asociará directamente al usuario invitado usando id_usuario_invitado
+            // Creamos la dirección con id_usuario_invitado en lugar de id_usuario
             if (direccion.tipo_direccion === 'formulario') {
                 const [addressResult] = await connection.query(
-                    'INSERT INTO direcciones (id_usuario, direccion, tipo_direccion, pais, departamento, municipio) VALUES (?, ?, ?, ?, ?, ?)',
-                    [id_usuario, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio]
+                    'INSERT INTO direcciones (id_usuario_invitado, direccion, tipo_direccion, pais, departamento, municipio) VALUES (?, ?, ?, ?, ?, ?)',
+                    [id_usuario_invitado, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio]
                 );
                 id_direccion = addressResult.insertId;
             } else {
                 const [addressResult] = await connection.query(
-                    'INSERT INTO direcciones (id_usuario, direccion, tipo_direccion, latitud, longitud, precision_ubicacion, direccion_formateada) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    [id_usuario, direccion.direccion_formateada || 'Ubicación en tiempo real', 'tiempo_real', direccion.latitud, direccion.longitud, direccion.precision_ubicacion, direccion.direccion_formateada]
+                    'INSERT INTO direcciones (id_usuario_invitado, direccion, tipo_direccion, latitud, longitud, precision_ubicacion, direccion_formateada) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    [id_usuario_invitado, direccion.direccion_formateada || 'Ubicación en tiempo real', 'tiempo_real', direccion.latitud, direccion.longitud, direccion.precision_ubicacion, direccion.direccion_formateada]
                 );
                 id_direccion = addressResult.insertId;
             }
@@ -896,19 +901,17 @@ exports.createOrder = async (req, res) => {
                         console.log(`Producto encontrado por ID: ${id_producto_a_usar}`);
                     }
                 }
-                
-                if (!id_producto_a_usar) {
+                  if (!id_producto_a_usar) {
                     // El producto no existe en la base de datos.
-                    console.log(`El producto ${producto.nombre_producto} no existe en la BD. Creando nuevo producto.`);
+                    console.log(`Error: El producto "${producto.nombre_producto}" no existe en la base de datos.`);
                     
-                    // Insertamos un producto básico en la tabla productos
-                    const [newProductResult] = await connection.query(
-                        'INSERT INTO productos (titulo, precio, descripcion) VALUES (?, ?, ?)',
-                        [producto.nombre_producto, producto.precio_unitario, 'Producto agregado desde pedido']
-                    );
+                    // No creamos productos automáticamente, retornamos error
+                    erroresDetalles.push({
+                        producto: producto.nombre_producto,
+                        error: 'Producto no encontrado en la base de datos'
+                    });
                     
-                    id_producto_a_usar = newProductResult.insertId;
-                    console.log(`Nuevo producto creado con ID: ${id_producto_a_usar}`);
+                    continue; // Saltamos al siguiente producto
                 }
                 
                 // Calculamos el subtotal si no viene
