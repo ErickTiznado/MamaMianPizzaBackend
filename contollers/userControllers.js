@@ -288,8 +288,7 @@ exports.updateUserProfile = async (req, res) => {
                     updateFields.push('foto_perfil = ?');
                     updateValues.push(fotoPerfilPath);
                 }
-                
-                // Check if there are fields to update
+                  // Check if there are fields to update
                 if (updateFields.length === 0) {
                     return res.status(400).json({
                         message: 'No se proporcionaron campos válidos para actualizar',
@@ -297,8 +296,6 @@ exports.updateUserProfile = async (req, res) => {
                     });
                 }
                 
-                // Add updated_at timestamp
-                updateFields.push('updated_at = NOW()');
                 updateValues.push(id);
                 
                 const updateQuery = `UPDATE usuarios SET ${updateFields.join(', ')} WHERE id_usuario = ?`;
@@ -311,9 +308,8 @@ exports.updateUserProfile = async (req, res) => {
                             error: updateErr.message
                         });
                     }
-                    
-                    // Get updated user information
-                    pool.query('SELECT id_usuario, nombre, correo, celular, foto_perfil, fecha_nacimiento, sexo, dui, created_at, updated_at FROM usuarios WHERE id_usuario = ?', [id], (selectErr, selectResults) => {
+                      // Get updated user information
+                    pool.query('SELECT id_usuario, nombre, correo, celular, foto_perfil, fecha_nacimiento, sexo, dui FROM usuarios WHERE id_usuario = ?', [id], (selectErr, selectResults) => {
                         if (selectErr) {
                             console.error('Error al obtener usuario actualizado:', selectErr);
                             return res.status(500).json({
@@ -323,8 +319,7 @@ exports.updateUserProfile = async (req, res) => {
                         }
                         
                         const updatedUser = selectResults[0];
-                        
-                        res.status(200).json({
+                          res.status(200).json({
                             message: 'Perfil de usuario actualizado exitosamente',
                             campos_actualizados: Object.keys(fieldsToUpdate),
                             usuario: {
@@ -335,9 +330,7 @@ exports.updateUserProfile = async (req, res) => {
                                 foto_perfil: updatedUser.foto_perfil,
                                 fecha_nacimiento: updatedUser.fecha_nacimiento,
                                 sexo: updatedUser.sexo,
-                                dui: updatedUser.dui,
-                                fecha_creacion: updatedUser.created_at,
-                                fecha_actualizacion: updatedUser.updated_at
+                                dui: updatedUser.dui
                             }
                         });
                     });
