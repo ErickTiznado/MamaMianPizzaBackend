@@ -555,10 +555,11 @@ exports.getOrderAverages = async (req, res) => {
  * Creates a new order with proper guest user handling
  * 
  * MODIFICATIONS MADE:
- * 1. Guest users are now saved ONLY to usuarios_invitados table (no duplicate entries in usuarios table)
- * 2. Addresses for guest users are linked directly to id_usuario_invitado
- * 3. Product creation is disabled - orders can only use existing products from the database
- * 4. If a product doesn't exist, the order detail is skipped and an error is reported
+ * 1. Guest users are saved to usuarios_invitados table 
+ * 2. A temporary user is also created in usuarios table to link addresses (direcciones table only supports id_usuario)
+ * 3. Orders link to both id_usuario (for addresses) and id_usuario_invitado (for guest tracking)
+ * 4. Product creation is disabled - orders can only use existing products from the database
+ * 5. If a product doesn't exist, the order detail is skipped and an error is reported
  * 
  * @param {Object} req - Request object containing order data
  * @param {Object} res - Response object
@@ -757,9 +758,7 @@ exports.createOrder = async (req, res) => {
                 detalle: 'El subtotal debe ser un número mayor a 0',
                 valor_recibido: subtotal
             });
-        }
-
-        // Generate unique order code
+        }        // Generate unique order code
         const codigo_pedido = generateOrderCode();
 
         let id_usuario = null;
@@ -801,67 +800,89 @@ exports.createOrder = async (req, res) => {
                 );
                 id_direccion = addressResult.insertId;
             }        } else {
-            // Para clientes invitados, guardamos en la tabla usuarios_invitados
-            // Verificamos si ya existe un usuario invitado con ese número celular
+            // Para clientes invitados, primero verificamos si ya existe en usuarios_invitados
             const [existingGuests] = await connection.query(
                 'SELECT * FROM usuarios_invitados WHERE celular = ?',
                 [cliente.telefono]
             );
             
+            let id_usuario_invitado;
             if (existingGuests.length > 0) {
-                // Si ya existe, usamos ese ID
+                // Si ya existe, usamos ese ID y actualizamos la información
                 id_usuario_invitado = existingGuests[0].id_usuario_invitado;
                 
-                // Actualizamos el registro para actualizar el timestamp de último pedido
                 await connection.query(
-                    'UPDATE usuarios_invitados SET ultimo_pedido = CURRENT_TIMESTAMP WHERE id_usuario_invitado = ?',
-                    [id_usuario_invitado]
+                    'UPDATE usuarios_invitados SET nombre = ?, apellido = ?, ultimo_pedido = CURRENT_TIMESTAMP WHERE id_usuario_invitado = ?',
+                    [cliente.nombre, cliente.apellido || '', id_usuario_invitado]
                 );
             } else {
-                // Si no existe, creamos un nuevo usuario invitado
+                // Si no existe, creamos un nuevo usuario invitado en usuarios_invitados
                 const [guestResult] = await connection.query(
-                    'INSERT INTO usuarios_invitados (nombre, apellido, celular) VALUES (?, ?, ?)',
-                    [cliente.nombre, cliente.apellido || '', cliente.telefono]
+                    'INSERT INTO usuarios_invitados (nombre, apellido, celular, fecha_creacion, ultimo_pedido) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+                    [
+                        cliente.nombre, 
+                        cliente.apellido || '',
+                        cliente.telefono
+                    ]
                 );
                 
                 id_usuario_invitado = guestResult.insertId;
             }
 
-            // Para usuarios invitados, NO necesitamos crear un registro en la tabla usuarios
-            // La dirección se asociará directamente al usuario invitado usando id_usuario_invitado
-            // Creamos la dirección con id_usuario_invitado en lugar de id_usuario
+            // Para usuarios invitados, también creamos un usuario temporal en la tabla usuarios
+            // para poder crear la dirección (que requiere id_usuario)
+            const [tempUserResult] = await connection.query(
+                'INSERT INTO usuarios (nombre, correo, contrasena, celular) VALUES (?, ?, ?, ?)',
+                [
+                    cliente.nombre, 
+                    `guest_${cliente.telefono}_${Date.now()}@temp.com`, // Email temporal único
+                    'guest_user_no_password', // Contraseña dummy para usuarios invitados
+                    cliente.telefono
+                ]
+            );
+            
+            id_usuario = tempUserResult.insertId;
+
+            // Crear la dirección usando el usuario temporal
             if (direccion.tipo_direccion === 'formulario') {
                 const [addressResult] = await connection.query(
-                    'INSERT INTO direcciones (id_usuario_invitado, direccion, tipo_direccion, pais, departamento, municipio) VALUES (?, ?, ?, ?, ?, ?)',
-                    [id_usuario_invitado, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio]
+                    'INSERT INTO direcciones (id_usuario, direccion, tipo_direccion, pais, departamento, municipio) VALUES (?, ?, ?, ?, ?, ?)',
+                    [id_usuario, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio]
                 );
                 id_direccion = addressResult.insertId;
             } else {
                 const [addressResult] = await connection.query(
-                    'INSERT INTO direcciones (id_usuario_invitado, direccion, tipo_direccion, latitud, longitud, precision_ubicacion, direccion_formateada) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    [id_usuario_invitado, direccion.direccion_formateada || 'Ubicación en tiempo real', 'tiempo_real', direccion.latitud, direccion.longitud, direccion.precision_ubicacion, direccion.direccion_formateada]
+                    'INSERT INTO direcciones (id_usuario, direccion, tipo_direccion, latitud, longitud, precision_ubicacion, direccion_formateada) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    [id_usuario, direccion.direccion_formateada || 'Ubicación en tiempo real', 'tiempo_real', direccion.latitud, direccion.longitud, direccion.precision_ubicacion, direccion.direccion_formateada]
                 );
                 id_direccion = addressResult.insertId;
             }
+        }        // Create new order
+        const orderInsertFields = [
+            'codigo_pedido', 'id_usuario', 'id_direccion', 'estado', 'total', 'tipo_cliente', 
+            'metodo_pago', 'nombre_cliente', 'apellido_cliente', 'telefono', 'email', 
+            'num_tarjeta_masked', 'nombre_tarjeta', 'subtotal', 'costo_envio', 'impuestos', 
+            'aceptado_terminos', 'tiempo_estimado_entrega'
+        ];
+        
+        const orderInsertValues = [
+            codigo_pedido, id_usuario, id_direccion, 'pendiente', total, tipo_cliente, 
+            metodo_pago, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
+            metodo_pago === 'tarjeta' ? req.body.num_tarjeta_masked : null, 
+            metodo_pago === 'tarjeta' ? req.body.nombre_tarjeta : null, 
+            subtotal, costo_envio, impuestos, aceptado_terminos ? 1 : 0, tiempo_estimado_entrega
+        ];
+
+        // Para usuarios invitados, también incluir id_usuario_invitado
+        if (tipo_cliente === 'invitado' && id_usuario_invitado) {
+            orderInsertFields.push('id_usuario_invitado');
+            orderInsertValues.push(id_usuario_invitado);
         }
 
-        // Create new order
-        const [orderResult] = await connection.query(
-            `INSERT INTO pedidos (
-                codigo_pedido, id_usuario, id_usuario_invitado, id_direccion, estado, total, tipo_cliente, 
-                metodo_pago, nombre_cliente, apellido_cliente, telefono, email, 
-                num_tarjeta_masked, nombre_tarjeta, subtotal, costo_envio, impuestos, 
-                aceptado_terminos, tiempo_estimado_entrega
-            ) VALUES (?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        const placeholders = orderInsertFields.map(() => '?').join(', ');
+        const orderQuery = `INSERT INTO pedidos (${orderInsertFields.join(', ')}) VALUES (${placeholders})`;
 
-            [
-                codigo_pedido, id_usuario, id_usuario_invitado, id_direccion, total, tipo_cliente, 
-                metodo_pago, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
-                metodo_pago === 'tarjeta' ? req.body.num_tarjeta_masked : null, 
-                metodo_pago === 'tarjeta' ? req.body.nombre_tarjeta : null, 
-                subtotal, costo_envio, impuestos, aceptado_terminos ? 1 : 0, tiempo_estimado_entrega
-            ]
-        );
+        const [orderResult] = await connection.query(orderQuery, orderInsertValues);
 
         const id_pedido = orderResult.insertId;
         console.log(`Pedido creado con ID: ${id_pedido}, Código: ${codigo_pedido}`);
