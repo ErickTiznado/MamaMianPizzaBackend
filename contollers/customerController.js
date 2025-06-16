@@ -1553,7 +1553,7 @@ exports.getAllCustomersDetailed = async (req, res) => {
                 JOIN productos p ON r.id_producto = p.id_producto
                 WHERE r.id_usuario = ?
                 ORDER BY r.fecha_creacion DESC
-            `, [customer.id_usuario]);            // Format reviews
+            `, [customer.id_usuario]);              // Format reviews
             const formattedReviews = reviews.map(review => ({
                 id: review.id_resena,
                 comentario: review.comentario,
