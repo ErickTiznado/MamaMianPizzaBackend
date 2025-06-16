@@ -554,12 +554,16 @@ exports.getOrderAverages = async (req, res) => {
 /**
  * Creates a new order with proper guest user handling
  * 
- * MODIFICATIONS MADE:
- * 1. Guest users are saved to usuarios_invitados table 
- * 2. A temporary user is also created in usuarios table to link addresses (direcciones table only supports id_usuario)
+ * GUEST USER HANDLING:
+ * 1. Guest users are saved ONLY to usuarios_invitados table (primary storage)
+ * 2. A temporary user is created in usuarios table ONLY for address linking
+ *    (required due to direcciones table foreign key constraint)
  * 3. Orders link to both id_usuario (for addresses) and id_usuario_invitado (for guest tracking)
- * 4. Product creation is disabled - orders can only use existing products from the database
- * 5. If a product doesn't exist, the order detail is skipped and an error is reported
+ * 4. Guest user data is retrieved from usuarios_invitados, not usuarios table
+ * 
+ * PRODUCT HANDLING:
+ * 5. Product creation is disabled - orders can only use existing products from the database
+ * 6. If a product doesn't exist, the order detail is skipped and an error is reported
  * 
  * @param {Object} req - Request object containing order data
  * @param {Object} res - Response object
@@ -800,13 +804,12 @@ exports.createOrder = async (req, res) => {
                 );
                 id_direccion = addressResult.insertId;
             }        } else {
-            // Para clientes invitados, primero verificamos si ya existe en usuarios_invitados
+            // Para clientes invitados, verificamos si ya existe en usuarios_invitados
             const [existingGuests] = await connection.query(
                 'SELECT * FROM usuarios_invitados WHERE celular = ?',
                 [cliente.telefono]
             );
             
-            let id_usuario_invitado;
             if (existingGuests.length > 0) {
                 // Si ya existe, usamos ese ID y actualizamos la información
                 id_usuario_invitado = existingGuests[0].id_usuario_invitado;
@@ -816,7 +819,7 @@ exports.createOrder = async (req, res) => {
                     [cliente.nombre, cliente.apellido || '', id_usuario_invitado]
                 );
             } else {
-                // Si no existe, creamos un nuevo usuario invitado en usuarios_invitados
+                // Si no existe, creamos un nuevo usuario invitado SOLO en usuarios_invitados
                 const [guestResult] = await connection.query(
                     'INSERT INTO usuarios_invitados (nombre, apellido, celular, fecha_creacion, ultimo_pedido) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
                     [
@@ -829,14 +832,14 @@ exports.createOrder = async (req, res) => {
                 id_usuario_invitado = guestResult.insertId;
             }
 
-            // Para usuarios invitados, también creamos un usuario temporal en la tabla usuarios
-            // para poder crear la dirección (que requiere id_usuario)
+            // Para direcciones de usuarios invitados, creamos un usuario temporal SOLO si es necesario
+            // para mantener la integridad referencial con la tabla direcciones
             const [tempUserResult] = await connection.query(
                 'INSERT INTO usuarios (nombre, correo, contrasena, celular) VALUES (?, ?, ?, ?)',
                 [
-                    cliente.nombre, 
-                    `guest_${cliente.telefono}_${Date.now()}@temp.com`, // Email temporal único
-                    'guest_user_no_password', // Contraseña dummy para usuarios invitados
+                    `Invitado-${cliente.nombre}`, 
+                    `invitado_${cliente.telefono}_${Date.now()}@mamamianpizza.com`, // Email temporal único
+                    await bcrypt.hash('no_password_guest', 5), // Hash dummy para usuarios invitados
                     cliente.telefono
                 ]
             );
@@ -846,8 +849,8 @@ exports.createOrder = async (req, res) => {
             // Crear la dirección usando el usuario temporal
             if (direccion.tipo_direccion === 'formulario') {
                 const [addressResult] = await connection.query(
-                    'INSERT INTO direcciones (id_usuario, direccion, tipo_direccion, pais, departamento, municipio) VALUES (?, ?, ?, ?, ?, ?)',
-                    [id_usuario, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio]
+                    'INSERT INTO direcciones (id_usuario, direccion, tipo_direccion, pais, departamento, municipio, referencias) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    [id_usuario, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio, direccion.referencias || null]
                 );
                 id_direccion = addressResult.insertId;
             } else {
@@ -857,7 +860,7 @@ exports.createOrder = async (req, res) => {
                 );
                 id_direccion = addressResult.insertId;
             }
-        }        // Create new order
+        }// Create new order
         const orderInsertFields = [
             'codigo_pedido', 'id_usuario', 'id_direccion', 'estado', 'total', 'tipo_cliente', 
             'metodo_pago', 'nombre_cliente', 'apellido_cliente', 'telefono', 'email', 
@@ -1083,9 +1086,8 @@ exports.getAllOrders = async (req, res) => {
 exports.getOrdersByStatus = async (req, res) => {
     try {
         const { status } = req.params;
-        
-        // Validar que el estado proporcionado sea válido
-        const estadosValidos = ['pendiente', 'en_proceso', 'entregado', 'cancelado'];
+          // Validar que el estado proporcionado sea válido
+        const estadosValidos = ['pendiente', 'en proceso', 'en camino', 'entregado', 'cancelado'];
         if (!estadosValidos.includes(status)) {
             return res.status(400).json({ message: 'Estado de pedido no válido' });
         }
@@ -1223,9 +1225,8 @@ exports.updateOrderStatus = async (req, res) => {
     try {
         const { id } = req.params;
         const { estado } = req.body;
-        
-        // Validar que el estado proporcionado sea válido
-        const estadosValidos = ['pendiente', 'en_proceso', 'entregado', 'cancelado'];
+          // Validar que el estado proporcionado sea válido
+        const estadosValidos = ['pendiente', 'en proceso', 'en camino', 'entregado', 'cancelado'];
         if (!estadosValidos.includes(estado)) {
             return res.status(400).json({ message: 'Estado de pedido no válido' });
         }

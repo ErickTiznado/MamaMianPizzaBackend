@@ -69,7 +69,7 @@ exports.submitContent = (req, res) => {
       return res.status(500).json({ message: 'Error al subir la imagen: ' + err.message });
     }
 
-    const { titulo, descripcion, porciones, categoria, sesion, precios } = req.body;
+    const { titulo, descripcion, categoria, sesion, precios } = req.body;
     // precios debe venir como objeto: { "1": "6.00", "2": "8.00", ... }
     const preciosObj = typeof precios === 'string'
       ? JSON.parse(precios)
@@ -211,17 +211,34 @@ exports.getMenu = (req, res) => {
   });
 };
 
-
-
     exports.DeleteContent = (req, res) => {
         const { id_producto } = req.params;
-        pool.query('DELETE FROM productos WHERE id_producto = ?', [id_producto], (err, results) => {
+        
+        // Primero eliminar los precios asociados al producto
+        pool.query('DELETE FROM precios WHERE pizza_id = ?', [id_producto], (err, priceResults) => {
             if(err){
-                console.error('Error al eliminar el producto', err);
-                return res.status(500).json({ message: 'Error al eliminar el producto' });
+                console.error('Error al eliminar precios del producto', err);
+                return res.status(500).json({ message: 'Error al eliminar precios del producto' });
             }
-            res.status(200).json({ message: 'Producto eliminado exitosamente' });
-        })
+            
+            // Después eliminar el producto
+            pool.query('DELETE FROM productos WHERE id_producto = ?', [id_producto], (err, productResults) => {
+                if(err){
+                    console.error('Error al eliminar el producto', err);
+                    return res.status(500).json({ message: 'Error al eliminar el producto' });
+                }
+                
+                if(productResults.affectedRows === 0){
+                    return res.status(404).json({ message: 'Producto no encontrado' });
+                }
+                
+                res.status(200).json({ 
+                    message: 'Producto y sus precios eliminados exitosamente',
+                    preciosEliminados: priceResults.affectedRows,
+                    productosEliminados: productResults.affectedRows
+                });
+            });
+        });
     }
 
     exports.TotalProducts = (req, res) => {
@@ -234,19 +251,17 @@ exports.getMenu = (req, res) => {
         })
     }
 
-
-
     exports.updateContent = (req, res) => {
   upload(req, res, function(err) {
     if (err) return res.status(400).json({ message: err.message });
 
     const { id_producto } = req.params;
-    const { titulo, descripcion, porciones, categoria, sesion, precios } = req.body;
+    const { titulo, descripcion, categoria, sesion, precios } = req.body;
     const preciosObj = typeof precios === 'string'
       ? JSON.parse(precios)
       : precios;
 
-    if (!titulo || !descripcion || !porciones || !sesion || !categoria || !preciosObj) {
+    if (!titulo || !descripcion || !sesion || !categoria || !preciosObj) {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
     }
 
@@ -262,9 +277,9 @@ exports.getMenu = (req, res) => {
       // 1) Actualizar datos básicos de la pizza
       pool.query(
         `UPDATE productos SET
-           titulo = ?, descripcion = ?, porciones = ?, seccion = ?, id_categoria = ?, activo = ?, imagen = COALESCE(?, imagen), fecha_actualizacion = ?
+           titulo = ?, descripcion = ?, seccion = ?, id_categoria = ?, activo = ?, imagen = COALESCE(?, imagen), fecha_actualizacion = ?
          WHERE id_producto = ?`,
-        [titulo, descripcion, porciones, sesion, idcategoria, activo, imagenPath, actDate, id_producto],
+        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actDate, id_producto],
         err => {
           if (err) {
             console.error(err);
