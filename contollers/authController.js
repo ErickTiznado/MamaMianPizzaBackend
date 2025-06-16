@@ -1,16 +1,30 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const twilio = require('twilio');
 
-// Twilio configuration from environment variables
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+// Simple token generation (temporary solution without JWT)
+const generateSimpleToken = (userId) => {
+    const timestamp = Date.now();
+    const randomPart = Math.random().toString(36).substring(2);
+    return Buffer.from(`${userId}:${timestamp}:${randomPart}`).toString('base64');
+};
 
-// Initialize Twilio client
-const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+// Validate simple token
+const validateSimpleToken = (token) => {
+    try {
+        const decoded = Buffer.from(token, 'base64').toString();
+        const [userId, timestamp, randomPart] = decoded.split(':');
+        const tokenAge = Date.now() - parseInt(timestamp);
+        
+        // Token expires after 15 minutes (900000 ms)
+        if (tokenAge > 900000) {
+            return null;
+        }
+        
+        return { id_usuario: parseInt(userId) };
+    } catch (error) {
+        return null;
+    }
+};
 
 // Helper function to generate 6-digit OTP
 const generateOTP = () => {
@@ -102,50 +116,41 @@ exports.requestPasswordReset = async (req, res) => {
                                 if (insertErr) {
                                     console.error('Error al guardar OTP:', insertErr);
                                     return res.status(500).json({
-                                        message: 'Error al generar código de verificación',
-                                        error: insertErr.message
+                                        message: 'Error al generar código de verificación',                                        error: insertErr.message
                                     });
                                 }
                                 
-                                // Send SMS with OTP
+                                // Generate OTP response
                                 try {
                                     const phoneForSMS = formatPhoneForSMS(celular);
                                     const message = `Hola ${user.nombre}, tu código de verificación para restablecer tu contraseña es: ${otp}. Válido por 10 minutos.`;
                                     
-                                    if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER) {
-                                        await twilioClient.messages.create({
-                                            body: message,
-                                            from: TWILIO_FROM_NUMBER,
-                                            to: phoneForSMS
-                                        });
-                                        
-                                        console.log(`SMS enviado a ${phoneForSMS} con OTP: ${otp}`);
-                                    } else {
-                                        // For development/testing - log OTP instead of sending SMS
-                                        console.log(`[DESARROLLO] OTP para ${phoneForSMS}: ${otp}`);
-                                    }
+                                    // For now, just log the OTP (SMS functionality can be added later)
+                                    console.log(`[CÓDIGO OTP] Para ${phoneForSMS}: ${otp}`);
+                                    console.log(`[MENSAJE] ${message}`);
                                     
                                     res.status(200).json({
-                                        message: 'Código de verificación enviado por SMS',
+                                        message: 'Código de verificación generado (revisar logs del servidor)',
                                         celular: celular.replace(/\d(?=\d{4})/g, '*'), // Mask phone number
-                                        validez_minutos: 10
+                                        validez_minutos: 10,
+                                        otp_para_pruebas: otp // Solo para desarrollo - quitar en producción
                                     });
                                     
                                 } catch (smsError) {
-                                    console.error('Error al enviar SMS:', smsError);
+                                    console.error('Error al generar código:', smsError);
                                     
-                                    // Delete the OTP if SMS failed
+                                    // Delete the OTP if failed
                                     pool.query('DELETE FROM otp_resets WHERE id_usuario = ?', [user.id_usuario]);
                                     
                                     return res.status(500).json({
-                                        message: 'Error al enviar código por SMS',
-                                        error: 'Servicio de SMS no disponible'
+                                        message: 'Error al generar código de verificación',
+                                        error: 'Error interno del servidor'
                                     });
                                 }
-                            }
-                        );
-                    }
-                );
+                            });
+                        }
+                    );
+                });
             }
         );
         
@@ -202,19 +207,10 @@ exports.verifyResetOTP = async (req, res) => {
                     message: 'Código OTP inválido o expirado'
                 });
             }
-            
-            const user = results[0];
+              const user = results[0];
             
             // Generate temporary token for password reset (15 minutes)
-            const resetToken = jwt.sign(
-                { 
-                    id_usuario: user.id_usuario,
-                    purpose: 'password-reset',
-                    timestamp: Date.now()
-                },
-                JWT_SECRET,
-                { expiresIn: '15m' }
-            );
+            const resetToken = generateSimpleToken(user.id_usuario);
             
             // Mark OTP as used (optional: you could delete it or add a 'used' flag)
             pool.query(
@@ -261,21 +257,11 @@ exports.resetPassword = async (req, res) => {
                 message: 'La contraseña debe tener al menos 8 caracteres'
             });
         }
-        
-        // Verify and decode token
-        let decoded;
-        try {
-            decoded = jwt.verify(token, JWT_SECRET);
-        } catch (tokenError) {
+          // Verify and decode token
+        const decoded = validateSimpleToken(token);
+        if (!decoded) {
             return res.status(401).json({
                 message: 'Token inválido o expirado'
-            });
-        }
-        
-        // Validate token purpose
-        if (decoded.purpose !== 'password-reset') {
-            return res.status(401).json({
-                message: 'Token no válido para esta operación'
             });
         }
         

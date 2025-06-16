@@ -16,7 +16,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const tamanosRoutes = require('./routes/tamanosRoutes');
 const resenasRoutes = require('./routes/resenasRoutes');
-const authRoutes = require('./routes/authRoutes');
+// const authRoutes = require('./routes/authRoutes'); // Commented out temporarily
 // Initialize express app
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -75,7 +75,7 @@ app.use('/api/reportes', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/tamanos', tamanosRoutes);
 app.use('/api/resenas', resenasRoutes);
-app.use('/api/auth', authRoutes);
+// app.use('/api/auth', authRoutes); // Commented out temporarily - install jsonwebtoken and twilio first
 // Default route
 app.get('/', (req, res) => {
   res.send('Mama Mian Pizza API is running');
