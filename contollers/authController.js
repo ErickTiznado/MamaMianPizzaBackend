@@ -148,12 +148,10 @@ exports.requestPasswordReset = async (req, res) => {
                                     });
                                 }
                             });
-                        }
-                    );
-                });
+                    }
+                );
             }
         );
-        
     } catch (error) {
         console.error('Error en requestPasswordReset:', error);
         res.status(500).json({
