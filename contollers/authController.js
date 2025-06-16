@@ -112,11 +112,11 @@ exports.requestPasswordReset = async (req, res) => {
                         pool.query(
                             'INSERT INTO otp_resets (id_usuario, otp, expires_at, created_at) VALUES (?, ?, ?, NOW())',
                             [user.id_usuario, otp, expiresAt],
-                            async (insertErr) => {
-                                if (insertErr) {
+                            async (insertErr) => {                                if (insertErr) {
                                     console.error('Error al guardar OTP:', insertErr);
                                     return res.status(500).json({
-                                        message: 'Error al generar código de verificación',                                        error: insertErr.message
+                                        message: 'Error al generar código de verificación',
+                                        error: insertErr.message
                                     });
                                 }
                                 
