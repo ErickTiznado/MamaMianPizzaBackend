@@ -211,17 +211,34 @@ exports.getMenu = (req, res) => {
   });
 };
 
-
-
     exports.DeleteContent = (req, res) => {
         const { id_producto } = req.params;
-        pool.query('DELETE FROM productos WHERE id_producto = ?', [id_producto], (err, results) => {
+        
+        // Primero eliminar los precios asociados al producto
+        pool.query('DELETE FROM precios WHERE pizza_id = ?', [id_producto], (err, priceResults) => {
             if(err){
-                console.error('Error al eliminar el producto', err);
-                return res.status(500).json({ message: 'Error al eliminar el producto' });
+                console.error('Error al eliminar precios del producto', err);
+                return res.status(500).json({ message: 'Error al eliminar precios del producto' });
             }
-            res.status(200).json({ message: 'Producto eliminado exitosamente' });
-        })
+            
+            // Después eliminar el producto
+            pool.query('DELETE FROM productos WHERE id_producto = ?', [id_producto], (err, productResults) => {
+                if(err){
+                    console.error('Error al eliminar el producto', err);
+                    return res.status(500).json({ message: 'Error al eliminar el producto' });
+                }
+                
+                if(productResults.affectedRows === 0){
+                    return res.status(404).json({ message: 'Producto no encontrado' });
+                }
+                
+                res.status(200).json({ 
+                    message: 'Producto y sus precios eliminados exitosamente',
+                    preciosEliminados: priceResults.affectedRows,
+                    productosEliminados: productResults.affectedRows
+                });
+            });
+        });
     }
 
     exports.TotalProducts = (req, res) => {
