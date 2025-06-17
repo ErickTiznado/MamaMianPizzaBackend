@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: vps.mamamianpizza.com
--- Tiempo de generación: 17-06-2025 a las 02:52:19
+-- Tiempo de generación: 17-06-2025 a las 07:10:17
 -- Versión del servidor: 8.4.5
 -- Versión de PHP: 8.3.19
 
@@ -163,6 +163,21 @@ INSERT INTO `direcciones` (`id_direccion`, `id_usuario`, `direccion`, `referenci
 (16, 12, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL),
 (17, 12, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL),
 (18, 4, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `experiencia`
+--
+
+CREATE TABLE `experiencia` (
+  `id_experiencia` int NOT NULL,
+  `titulo` varchar(255) NOT NULL,
+  `valoracion` tinyint NOT NULL COMMENT '1–5 estrellas',
+  `id_usuario` int NOT NULL,
+  `contenido` text NOT NULL,
+  `aprobado` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0=no visible, 1=visible'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -401,8 +416,8 @@ CREATE TABLE `productos` (
 --
 
 INSERT INTO `productos` (`id_producto`, `titulo`, `descripcion`, `seccion`, `id_categoria`, `activo`, `imagen`, `fecha_creacion`, `fecha_actualizacion`) VALUES
-(3, 'Cheese Sticks con Salsa1', 'sdsadasd', 'Recomendacion de la Casa', 1, 0, 'https://api.mamamianpizza.com/uploads/imagen-1749613847375-275594258.jpg', '2025-06-11 03:47:04', '2025-06-11 03:51:34'),
-(4, 'Pizza de peperoni', 'fsdfsdf', 'Las mas Populares', 1, 0, 'https://api.mamamianpizza.com/uploads/imagen-1749694654492-645342192.jpg', '2025-06-12 02:14:08', '2025-06-12 02:14:08');
+(3, 'Cheese Sticks con Salsa11', 'sdsadasd', 'Recomendacion de la casa', 1, 0, 'https://api.mamamianpizza.com/uploads/imagen-1749613847375-275594258.jpg', '2025-06-11 03:47:04', '2025-06-17 02:02:24'),
+(4, 'Pizza de peperoni', 'fsdfsdf', 'Otros', 1, 0, 'https://api.mamamianpizza.com/uploads/imagen-1749694654492-645342192.jpg', '2025-06-12 02:14:08', '2025-06-17 02:01:43');
 
 -- --------------------------------------------------------
 
@@ -502,7 +517,7 @@ INSERT INTO `usuarios` (`id_usuario`, `nombre`, `correo`, `contrasena`, `celular
 (1, 'ERICK', 'admin_1749692622800@mamamianpizza.com', '$2b$05$jC4KdqS8vHrlwmdjUf/uh.AhdZ1Xd7gn6yrmFsXR2.UScydB5bV/m', '70830446', NULL, NULL, NULL, NULL),
 (2, 'ERICK', 'admin_1749700105259@mamamianpizza.com', '$2b$05$7.bsGhXj3vV7P5fezUi8cuxn.W2NumaTVexJG3Vro8pNquGmcQmrC', '70830446', NULL, NULL, NULL, NULL),
 (3, 'nathaly milenas', 'nathy.zelaya5@gmail.com', '$2b$10$UkKD/yDKIIcaqN3Hl.K1KuBWENdiB.f4u9eDK7dnV9uxcwCWVxS/2', '70141812', '2007-06-03', 'F', '123456789', NULL),
-(4, 'milena zelaya', 'nathy.zelaya55@gmail.com', '$2b$10$0Wx.0HLRSnbl6amYtIy1R.MDh/55Hks0LoZBVgg4.rW8yRXYj2Gd6', '70141812', '1992-06-07', 'F', '123456789', 'https://api.mamamianpizza.com/uploads/profiles/profile-1750049136142-374537521.png'),
+(4, 'milena zelaya', 'nathy.zelaya55@gmail.com', '$2b$10$0Wx.0HLRSnbl6amYtIy1R.MDh/55Hks0LoZBVgg4.rW8yRXYj2Gd6', '70141812', '1992-06-07', 'F', '123456789', 'https://api.mamamianpizza.com/uploads/profiles/profile-1750131911637-840529047.png'),
 (5, 'ERICK', 'admin_1749752900416@mamamianpizza.com', '$2b$05$c6TBfGgTS/WLpH6gaAkWMe4vEoO6B9gIskAIXnuMCdEnjqe50EHtq', '70830446', NULL, NULL, NULL, NULL),
 (6, 'Tiznado', 'admin_1749859237052@mamamianpizza.com', '$2b$05$XEujTJ67Hef9AiJYy/sPFOWBi/WXVAg2B0CuvJtoewKJiK.LsRxly', '70830446', NULL, NULL, NULL, NULL),
 (7, 'ERICK', 'admin_1749929069946@mamamianpizza.com', '$2b$05$9DS.UcYB37aE1Wto87Et/.I/521jkEaSSz2MGDr54PVbpACqlpjfe', '70830446', NULL, NULL, NULL, NULL),
@@ -510,7 +525,7 @@ INSERT INTO `usuarios` (`id_usuario`, `nombre`, `correo`, `contrasena`, `celular
 (9, 'mielna', 'invitado_1749932257497@mamamianpizza.com', '$2b$05$NVoVLD7BInZofll48paKfOcN0/AzZfg1esm91F4GrQxGEGLqkoDnC', '70141812', NULL, NULL, NULL, NULL),
 (10, 'ERICK1213', 'admin_1750007765841@mamamianpizza.com', '$2b$05$eoy10StUMCZID.LIGtmMguzC4HUs/VcKsUhpg6b3.AgyYLnR2KRIu', '70830446', NULL, NULL, NULL, NULL),
 (11, 'ERICK2121', 'guest_70830446_1750009570414@temp.com', 'guest_user_no_password', '70830446', NULL, NULL, NULL, NULL),
-(12, 'Erick Mauricio ', 'tiznadoerick3@gmail.com', '$2b$10$jjctxLgAJb76gttkyYbTu.97T7PjIhfesWEXUjzENyK5nv74Q.BC2', '70830446', '2002-10-06', 'M', '063693309', 'https://api.mamamianpizza.com/uploads/profiles/profile-1750091033242-425369579.jpg');
+(12, 'Erick Mauricio ', 'tiznadoerick3@gmail.com', '$2b$12$qMs2ZEPWbETWlE/h7xhjZO7R8iFKfFlRab1eKrhaA4U4yfQqOMwZ2', '70830446', '2002-10-06', 'M', '063693309', 'https://api.mamamianpizza.com/uploads/profiles/profile-1750091033242-425369579.jpg');
 
 -- --------------------------------------------------------
 
@@ -572,6 +587,13 @@ ALTER TABLE `detalle_pedidos`
 ALTER TABLE `direcciones`
   ADD PRIMARY KEY (`id_direccion`),
   ADD KEY `fk_direcciones_usuario` (`id_usuario`);
+
+--
+-- Indices de la tabla `experiencia`
+--
+ALTER TABLE `experiencia`
+  ADD PRIMARY KEY (`id_experiencia`),
+  ADD KEY `fk_experiencia_usuario` (`id_usuario`);
 
 --
 -- Indices de la tabla `historial_contenido`
@@ -721,6 +743,12 @@ ALTER TABLE `direcciones`
   MODIFY `id_direccion` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
+-- AUTO_INCREMENT de la tabla `experiencia`
+--
+ALTER TABLE `experiencia`
+  MODIFY `id_experiencia` int NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `historial_contenido`
 --
 ALTER TABLE `historial_contenido`
@@ -760,7 +788,7 @@ ALTER TABLE `notificaciones`
 -- AUTO_INCREMENT de la tabla `password_reset`
 --
 ALTER TABLE `password_reset`
-  MODIFY `id_reset` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id_reset` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT de la tabla `pedidos`
@@ -826,6 +854,12 @@ ALTER TABLE `detalle_pedidos`
 --
 ALTER TABLE `direcciones`
   ADD CONSTRAINT `direcciones_ibfk_1` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `experiencia`
+--
+ALTER TABLE `experiencia`
+  ADD CONSTRAINT `experiencia_ibfk_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `historial_contenido`
