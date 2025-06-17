@@ -13,12 +13,12 @@ router.post('/users_register', userController.createClient);
 router.post('/admins', userController.createAdmin);
 router.post('/login', userController.loginAdmin);
 
-// Admin management routes
-router.get('/admins/all', userController.getAllAdmins);
+// Admin management routes (corregidas para tu DB)
+router.get('/admins', userController.getAllAdmins);  // Cambiado de /admins/all a /admins
 router.get('/admins/stats', userController.getAdminStats);
 router.get('/admins/:id', userController.getAdminById);
 router.put('/admins/:id', userController.updateAdmin);
 router.delete('/admins/:id', userController.deleteAdmin);
-router.patch('/admins/:id/toggle-status', userController.toggleAdminStatus);
+// Removed toggle-status route since there's no 'activo' column
 
 module.exports = router;

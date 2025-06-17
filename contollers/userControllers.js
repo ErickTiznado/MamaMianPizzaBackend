@@ -438,11 +438,11 @@ exports.updateUserProfile = async (req, res) => {
 
 /**
  * Obtener todos los administradores
- * GET /api/admin/all
+ * GET /api/users/admins
  */
 exports.getAllAdmins = async (req, res) => {
     try {
-        const { page = 1, limit = 10, rol, activo } = req.query;
+        const { page = 1, limit = 10, rol } = req.query;
         const offset = (page - 1) * limit;
         
         let whereClause = 'WHERE 1=1';
@@ -454,13 +454,7 @@ exports.getAllAdmins = async (req, res) => {
             queryParams.push(rol);
         }
         
-        // Filtrar por estado activo si se especifica
-        if (activo !== undefined) {
-            whereClause += ' AND activo = ?';
-            queryParams.push(activo === 'true' ? 1 : 0);
-        }
-        
-        // Obtener administradores con paginación
+        // Obtener administradores con paginación (SIN columna activo)
         const [admins] = await pool.promise().query(`
             SELECT 
                 id_admin,
@@ -469,8 +463,7 @@ exports.getAllAdmins = async (req, res) => {
                 rol,
                 celular,
                 fecha_creacion,
-                ultimo_acceso,
-                COALESCE(activo, 1) as activo
+                ultimo_acceso
             FROM administradores 
             ${whereClause}
             ORDER BY fecha_creacion DESC
@@ -489,6 +482,7 @@ exports.getAllAdmins = async (req, res) => {
         
         res.status(200).json({
             message: 'Administradores obtenidos exitosamente',
+            total: total,
             administradores: admins,
             paginacion: {
                 pagina_actual: parseInt(page),
@@ -499,8 +493,7 @@ exports.getAllAdmins = async (req, res) => {
                 tiene_anterior: page > 1
             },
             filtros_aplicados: {
-                rol: rol || 'todos',
-                activo: activo || 'todos'
+                rol: rol || 'todos'
             }
         });
         
@@ -515,7 +508,7 @@ exports.getAllAdmins = async (req, res) => {
 
 /**
  * Obtener administrador por ID
- * GET /api/admin/:id
+ * GET /api/users/admins/:id
  */
 exports.getAdminById = async (req, res) => {
     try {
@@ -536,8 +529,7 @@ exports.getAdminById = async (req, res) => {
                 rol,
                 celular,
                 fecha_creacion,
-                ultimo_acceso,
-                COALESCE(activo, 1) as activo
+                ultimo_acceso
             FROM administradores 
             WHERE id_admin = ?
         `, [id]);
@@ -687,8 +679,7 @@ exports.updateAdmin = async (req, res) => {
             SET ${setClause}
             WHERE id_admin = ?
         `, updateValues);
-        
-        // Obtener el administrador actualizado
+          // Obtener el administrador actualizado (SIN columna activo)
         const [updatedAdmin] = await connection.query(`
             SELECT 
                 id_admin,
@@ -697,8 +688,7 @@ exports.updateAdmin = async (req, res) => {
                 rol,
                 celular,
                 fecha_creacion,
-                ultimo_acceso,
-                COALESCE(activo, 1) as activo
+                ultimo_acceso
             FROM administradores 
             WHERE id_admin = ?
         `, [id]);
@@ -728,8 +718,8 @@ exports.updateAdmin = async (req, res) => {
 };
 
 /**
- * Eliminar administrador (soft delete)
- * DELETE /api/admin/:id
+ * Eliminar administrador (hard delete únicamente)
+ * DELETE /api/users/admins/:id
  */
 exports.deleteAdmin = async (req, res) => {
     let connection;
@@ -738,7 +728,6 @@ exports.deleteAdmin = async (req, res) => {
         await connection.beginTransaction();
         
         const { id } = req.params;
-        const { hard_delete = false } = req.body;
         
         // Validar que el ID sea un número válido
         if (!id || isNaN(id)) {
@@ -766,7 +755,7 @@ exports.deleteAdmin = async (req, res) => {
         // Prevenir eliminación del último super_admin
         if (admin.rol === 'super_admin') {
             const [superAdminCount] = await connection.query(
-                'SELECT COUNT(*) as count FROM administradores WHERE rol = "super_admin" AND COALESCE(activo, 1) = 1'
+                'SELECT COUNT(*) as count FROM administradores WHERE rol = "super_admin"'
             );
             
             if (superAdminCount[0].count <= 1) {
@@ -777,41 +766,19 @@ exports.deleteAdmin = async (req, res) => {
             }
         }
         
-        if (hard_delete) {
-            // Eliminación permanente (solo para casos específicos)
-            await connection.query('DELETE FROM administradores WHERE id_admin = ?', [id]);
-            
-            await connection.commit();
-            
-            res.status(200).json({
-                message: 'Administrador eliminado permanentemente',
-                tipo_eliminacion: 'permanente',
-                administrador_eliminado: {
-                    id_admin: admin.id_admin,
-                    nombre: admin.nombre,
-                    rol: admin.rol
-                }
-            });
-        } else {
-            // Soft delete - marcar como inactivo
-            await connection.query(
-                'UPDATE administradores SET activo = 0 WHERE id_admin = ?',
-                [id]
-            );
-            
-            await connection.commit();
-            
-            res.status(200).json({
-                message: 'Administrador desactivado exitosamente',
-                tipo_eliminacion: 'desactivacion',
-                administrador_desactivado: {
-                    id_admin: admin.id_admin,
-                    nombre: admin.nombre,
-                    rol: admin.rol
-                },
-                nota: 'El administrador puede ser reactivado posteriormente'
-            });
-        }
+        // Eliminación permanente
+        await connection.query('DELETE FROM administradores WHERE id_admin = ?', [id]);
+        
+        await connection.commit();
+        
+        res.status(200).json({
+            message: 'Administrador eliminado permanentemente',
+            administrador_eliminado: {
+                id_admin: admin.id_admin,
+                nombre: admin.nombre,
+                rol: admin.rol
+            }
+        });
         
     } catch (error) {
         if (connection) {
@@ -830,112 +797,23 @@ exports.deleteAdmin = async (req, res) => {
 };
 
 /**
- * Cambiar estado activo/inactivo del administrador
- * PATCH /api/admin/:id/toggle-status
- */
-exports.toggleAdminStatus = async (req, res) => {
-    let connection;
-    try {
-        connection = await pool.promise().getConnection();
-        await connection.beginTransaction();
-        
-        const { id } = req.params;
-        
-        // Validar que el ID sea un número válido
-        if (!id || isNaN(id)) {
-            await connection.rollback();
-            return res.status(400).json({
-                message: 'ID de administrador no válido'
-            });
-        }
-        
-        // Verificar que el administrador existe y obtener su estado actual
-        const [existingAdmin] = await connection.query(
-            'SELECT id_admin, nombre, rol, COALESCE(activo, 1) as activo FROM administradores WHERE id_admin = ?',
-            [id]
-        );
-        
-        if (existingAdmin.length === 0) {
-            await connection.rollback();
-            return res.status(404).json({
-                message: 'Administrador no encontrado'
-            });
-        }
-        
-        const admin = existingAdmin[0];
-        const nuevoEstado = admin.activo === 1 ? 0 : 1;
-        
-        // Prevenir desactivación del último super_admin activo
-        if (admin.rol === 'super_admin' && admin.activo === 1) {
-            const [superAdminCount] = await connection.query(
-                'SELECT COUNT(*) as count FROM administradores WHERE rol = "super_admin" AND COALESCE(activo, 1) = 1'
-            );
-            
-            if (superAdminCount[0].count <= 1) {
-                await connection.rollback();
-                return res.status(400).json({
-                    message: 'No se puede desactivar el último super administrador activo'
-                });
-            }
-        }
-        
-        // Actualizar el estado
-        await connection.query(
-            'UPDATE administradores SET activo = ? WHERE id_admin = ?',
-            [nuevoEstado, id]
-        );
-        
-        await connection.commit();
-        
-        res.status(200).json({
-            message: `Administrador ${nuevoEstado === 1 ? 'activado' : 'desactivado'} exitosamente`,
-            administrador: {
-                id_admin: admin.id_admin,
-                nombre: admin.nombre,
-                rol: admin.rol,
-                estado_anterior: admin.activo === 1 ? 'activo' : 'inactivo',
-                estado_actual: nuevoEstado === 1 ? 'activo' : 'inactivo'
-            }
-        });
-        
-    } catch (error) {
-        if (connection) {
-            await connection.rollback();
-        }
-        console.error('Error al cambiar estado del administrador:', error);
-        res.status(500).json({
-            message: 'Error al cambiar estado del administrador',
-            error: error.message
-        });
-    } finally {
-        if (connection) {
-            connection.release();
-        }
-    }
-};
-
-/**
  * Obtener estadísticas de administradores
- * GET /api/admin/stats
+ * GET /api/users/admins/stats
  */
 exports.getAdminStats = async (req, res) => {
     try {
-        // Estadísticas generales
+        // Estadísticas generales (SIN columna activo)
         const [generalStats] = await pool.promise().query(`
             SELECT 
-                COUNT(*) as total_administradores,
-                SUM(CASE WHEN COALESCE(activo, 1) = 1 THEN 1 ELSE 0 END) as administradores_activos,
-                SUM(CASE WHEN COALESCE(activo, 1) = 0 THEN 1 ELSE 0 END) as administradores_inactivos
+                COUNT(*) as total_administradores
             FROM administradores
         `);
         
-        // Estadísticas por rol
+        // Estadísticas por rol (SIN columna activo)
         const [roleStats] = await pool.promise().query(`
             SELECT 
                 rol,
-                COUNT(*) as total,
-                SUM(CASE WHEN COALESCE(activo, 1) = 1 THEN 1 ELSE 0 END) as activos,
-                SUM(CASE WHEN COALESCE(activo, 1) = 0 THEN 1 ELSE 0 END) as inactivos
+                COUNT(*) as total
             FROM administradores
             GROUP BY rol
             ORDER BY 
@@ -953,8 +831,7 @@ exports.getAdminStats = async (req, res) => {
                 id_admin,
                 nombre,
                 rol,
-                fecha_creacion,
-                COALESCE(activo, 1) as activo
+                fecha_creacion
             FROM administradores
             ORDER BY fecha_creacion DESC
             LIMIT 5
@@ -966,8 +843,7 @@ exports.getAdminStats = async (req, res) => {
                 id_admin,
                 nombre,
                 rol,
-                ultimo_acceso,
-                COALESCE(activo, 1) as activo
+                ultimo_acceso
             FROM administradores
             WHERE ultimo_acceso IS NOT NULL
             ORDER BY ultimo_acceso DESC
