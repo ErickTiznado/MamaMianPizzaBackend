@@ -456,16 +456,8 @@ exports.getAllAdmins = async (req, res) => {
         
         // Obtener administradores con paginación (SIN columna activo)
         const [admins] = await pool.promise().query(`
-            SELECT 
-                id_admin,
-                nombre,
-                correo,
-                rol,
-                celular,
-                fecha_creacion,
-                ultimo_acceso
+            SELECT *
             FROM administradores 
-            ${whereClause}
             ORDER BY fecha_creacion DESC
             LIMIT ? OFFSET ?
         `, [...queryParams, parseInt(limit), parseInt(offset)]);
