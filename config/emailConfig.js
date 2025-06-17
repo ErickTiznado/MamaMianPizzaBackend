@@ -43,7 +43,7 @@ const createTransporter = () => {
         throw new Error(`Proveedor de correo no soportado: ${provider}`);
     }
     
-    return nodemailer.createTransporter(config);
+    return nodemailer.createTransport(config);
 };
 
 // Validar configuración de correo
