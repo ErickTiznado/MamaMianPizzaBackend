@@ -294,6 +294,7 @@ exports.getAllResenas = async (req, res) => {
                     r.aprobada,
                     r.fecha_creacion,
                     u.nombre as nombre_usuario,
+                    u.foto_perfil as foto_perfil_usuario,
                     p.titulo as nombre_producto
                 FROM resenas r
                 JOIN usuarios u ON r.id_usuario = u.id_usuario
@@ -324,12 +325,12 @@ exports.getAllResenas = async (req, res) => {
                     resenas_pendientes: parseInt(stats[0].resenas_pendientes || 0),
                     primera_resena: stats[0].primera_resena,
                     ultima_resena: stats[0].ultima_resena
-                },
-                resenas: reviews.map(review => ({
+                },                resenas: reviews.map(review => ({
                     id_resena: review.id_resena,
                     usuario: {
                         id: review.id_usuario,
                         nombre: review.nombre_usuario,
+                        foto_perfil: review.foto_perfil_usuario,
                         fecha_resena: review.fecha_creacion
                     },
                     producto: {
