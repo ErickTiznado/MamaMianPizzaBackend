@@ -3,11 +3,14 @@ const pool = require('../config/db');
 // Function to create a new experience comment
 exports.createExperiencia = async (req, res) => {
     try {
+        console.log('📝 Datos recibidos en createExperiencia:', req.body);
         const { titulo, valoracion, id_usuario, contenido } = req.body;
         
         // Validate required fields
         const missingFields = [];
         const receivedData = { titulo, valoracion, id_usuario, contenido };
+        
+        console.log('🔍 Datos extraídos:', receivedData);
         
         if (!titulo) missingFields.push('titulo');
         if (!valoracion) missingFields.push('valoracion');
@@ -15,6 +18,7 @@ exports.createExperiencia = async (req, res) => {
         if (!contenido) missingFields.push('contenido');
         
         if (missingFields.length > 0) {
+            console.log('❌ Campos faltantes:', missingFields);
             return res.status(400).json({
                 message: 'Faltan campos requeridos',
                 campos_faltantes: missingFields,
@@ -31,6 +35,7 @@ exports.createExperiencia = async (req, res) => {
         
         // Validate valoracion range (1-5 stars)
         if (valoracion < 1 || valoracion > 5) {
+            console.log('❌ Valoración fuera de rango:', valoracion);
             return res.status(400).json({
                 message: 'La valoración debe estar entre 1 y 5 estrellas'
             });
@@ -38,20 +43,24 @@ exports.createExperiencia = async (req, res) => {
         
         // Validate data types
         if (!Number.isInteger(parseInt(id_usuario))) {
+            console.log('❌ id_usuario no es entero:', id_usuario);
             return res.status(400).json({
                 message: 'id_usuario debe ser un número entero'
             });
         }
         
         if (!Number.isInteger(parseInt(valoracion))) {
+            console.log('❌ valoracion no es entero:', valoracion);
             return res.status(400).json({
                 message: 'La valoración debe ser un número entero'
             });
         }
         
+        console.log('✅ Validaciones pasadas, conectando a BD...');
         const connection = await pool.promise().getConnection();
         
         try {
+            console.log('🔍 Verificando si usuario existe:', id_usuario);
             // Check if user exists
             const [userExists] = await connection.query(
                 'SELECT id_usuario FROM usuarios WHERE id_usuario = ?',
@@ -59,16 +68,22 @@ exports.createExperiencia = async (req, res) => {
             );
             
             if (userExists.length === 0) {
+                console.log('❌ Usuario no encontrado:', id_usuario);
                 return res.status(404).json({
                     message: 'Usuario no encontrado'
                 });
             }
+            
+            console.log('✅ Usuario encontrado, insertando experiencia...');
+            console.log('📝 Datos a insertar:', { titulo, valoracion, id_usuario, contenido });
             
             // Insert the new experience
             const [result] = await connection.query(`
                 INSERT INTO experiencia (titulo, valoracion, id_usuario, contenido)
                 VALUES (?, ?, ?, ?)
             `, [titulo, valoracion, id_usuario, contenido]);
+            
+            console.log('✅ Experiencia insertada con ID:', result.insertId);
             
             // Get the created experience with user info
             const [newExperience] = await connection.query(`
@@ -80,6 +95,8 @@ exports.createExperiencia = async (req, res) => {
                 JOIN usuarios u ON e.id_usuario = u.id_usuario
                 WHERE e.id_experiencia = ?
             `, [result.insertId]);
+            
+            console.log('✅ Experiencia creada y recuperada:', newExperience[0]);
             
             res.status(201).json({
                 message: 'Experiencia creada exitosamente',
@@ -97,16 +114,18 @@ exports.createExperiencia = async (req, res) => {
                     }
                 }
             });
-            
-        } finally {
+              } finally {
             connection.release();
+            console.log('🔌 Conexión a BD liberada');
         }
         
     } catch (error) {
-        console.error('Error al crear experiencia:', error);
+        console.error('❌ Error al crear experiencia:', error);
+        console.error('📝 Stack trace:', error.stack);
         res.status(500).json({
             message: 'Error interno del servidor al crear la experiencia',
-            error: error.message
+            error: error.message,
+            details: error.stack
         });
     }
 };
