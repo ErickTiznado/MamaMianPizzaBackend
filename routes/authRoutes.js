@@ -15,6 +15,9 @@ router.post('/verify-reset', authController.verifyResetOTP);
 // Reset password with token
 router.put('/reset-password', authController.resetPassword);
 
+// Change password for authenticated users
+router.put('/change-password', authController.changePassword);
+
 // ============================
 // RUTAS PARA ADMINISTRADORES
 // ============================
@@ -27,5 +30,8 @@ router.post('/admin/verify-reset', authController.verifyResetOTPAdmin);
 
 // Reset password with token for admin
 router.put('/admin/reset-password', authController.resetPasswordAdmin);
+
+// Change password directly for admin (with current password)
+router.put('/admin/change-password', authController.changePasswordAdmin);
 
 module.exports = router;
