@@ -11,11 +11,11 @@ router.post('/users_register', userController.createClient);
 // Admin routes - TODAS las rutas específicas primero antes de /:id
 router.post('/admins', userController.createAdmin);
 router.post('/login', userController.loginAdmin);
-router.get('/gatadmins', userController.getAllAdmins);
+router.get('/Gettadmins', userController.getAllAdmins);
 router.get('/admins/stats', userController.getAdminStats);
 router.get('/admins/:id', userController.getAdminById);
-router.put('/admins/:id', userController.updateAdmin);
-router.delete('/admins/:id', userController.deleteAdmin);
+router.put('/Updateadmins/:id', userController.updateAdmin);
+router.delete('/Deleteadmins/:id', userController.deleteAdmin);
 
 // User routes con parámetros - AL FINAL para evitar conflictos
 router.get('/:id', userController.getUserById);
