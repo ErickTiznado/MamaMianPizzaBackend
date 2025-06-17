@@ -46,25 +46,119 @@ exports.getAllUsers = (req, res) => {
     });
 };
 
-exports.createAdmin = (req, res) => {
-    try{
-    const {nombre, correo, contrasena, rol, telefono} = req.body;
-    
-        if(!nombre || !correo || !contrasena || !rol || !telefono){
-            return res.status(400).json({message: 'Faltan datos requeridos'});
+exports.createAdmin = async (req, res) => {
+    let connection;
+    try {
+        connection = await pool.promise().getConnection();
+        await connection.beginTransaction();
+
+        const { nombre, correo, contrasena, rol, celular } = req.body;
+
+        // Validaciones de campos requeridos
+        if (!nombre || !correo || !contrasena || !rol) {
+            await connection.rollback();
+            return res.status(400).json({
+                message: 'Los campos nombre, correo, contrasena y rol son requeridos',
+                campos_requeridos: ['nombre', 'correo', 'contrasena', 'rol'],
+                campos_opcionales: ['celular']
+            });
         }
-        const hashedPass = bcrypt.hashSync(contrasena, 10);
-        pool.query('INSERT INTO administradores ( nombre, correo, contrasena, rol, telefono) VALUES ( ?, ? ,? ,? ,?)', [ nombre, correo, hashedPass, rol, telefono], (err, results) => {
-            if(err){
-                console.error('Error al crear administrador', err);
-                return res.status(500).json({message: 'Error al crear el usuario administrador'})
+
+        // Validar roles permitidos
+        const rolesPermitidos = ['super_admin', 'admin', 'moderador'];
+        if (!rolesPermitidos.includes(rol)) {
+            await connection.rollback();
+            return res.status(400).json({
+                message: 'Rol no válido',
+                roles_permitidos: rolesPermitidos
+            });
+        }
+
+        // Validar formato de email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(correo)) {
+            await connection.rollback();
+            return res.status(400).json({
+                message: 'El formato del correo electrónico no es válido'
+            });
+        }
+
+        // Verificar si el correo ya existe
+        const [existingAdmin] = await connection.query(
+            'SELECT id_admin FROM administradores WHERE correo = ?',
+            [correo]
+        );
+
+        if (existingAdmin.length > 0) {
+            await connection.rollback();
+            return res.status(409).json({
+                message: 'Ya existe un administrador con este correo electrónico'
+            });
+        }
+
+        // Validar fortaleza de contraseña
+        if (contrasena.length < 8) {
+            await connection.rollback();
+            return res.status(400).json({
+                message: 'La contraseña debe tener al menos 8 caracteres'
+            });
+        }
+
+        // Validar formato de celular (opcional)
+        if (celular) {
+            const celularRegex = /^(\+503\s?)?[67]\d{3}-?\d{4}$/;
+            if (!celularRegex.test(celular)) {
+                await connection.rollback();
+                return res.status(400).json({
+                    message: 'El formato del celular no es válido. Use: +503 7000-0000 o 70000000'
+                });
             }
-            res.status(201).json({message: 'Usuario Administrador creado exitosamente', id_admin: results.insertId});
+        }
+
+        // Encriptar contraseña
+        const saltRounds = 12; // Mayor seguridad para administradores
+        const hashedPassword = await bcrypt.hash(contrasena, saltRounds);
+
+        // Insertar nuevo administrador
+        const [result] = await connection.query(`
+            INSERT INTO administradores (nombre, correo, contrasena, rol, celular, fecha_creacion) 
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `, [nombre, correo, hashedPassword, rol, celular]);
+
+        // Obtener el administrador creado
+        const [newAdmin] = await connection.query(`
+            SELECT 
+                id_admin,
+                nombre,
+                correo,
+                rol,
+                celular,
+                fecha_creacion
+            FROM administradores 
+            WHERE id_admin = ?
+        `, [result.insertId]);
+
+        await connection.commit();
+
+        res.status(201).json({
+            message: 'Administrador creado exitosamente',
+            administrador: newAdmin[0]
         });
-}catch(error){
-    console.error('Error en el servidor', error);
-    res.status(500).json({message: 'Error en el servidor'});
-}
+
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+        }
+        console.error('Error al crear administrador:', error);
+        res.status(500).json({
+            message: 'Error al crear administrador',
+            error: error.message
+        });
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
 };
 
 
@@ -338,4 +432,564 @@ exports.updateUserProfile = async (req, res) => {
             }
         });
     });
+};
+
+// ========== ADMINISTRATOR MANAGEMENT ENDPOINTS ==========
+
+/**
+ * Obtener todos los administradores
+ * GET /api/admin/all
+ */
+exports.getAllAdmins = async (req, res) => {
+    try {
+        const { page = 1, limit = 10, rol, activo } = req.query;
+        const offset = (page - 1) * limit;
+        
+        let whereClause = 'WHERE 1=1';
+        const queryParams = [];
+        
+        // Filtrar por rol si se especifica
+        if (rol) {
+            whereClause += ' AND rol = ?';
+            queryParams.push(rol);
+        }
+        
+        // Filtrar por estado activo si se especifica
+        if (activo !== undefined) {
+            whereClause += ' AND activo = ?';
+            queryParams.push(activo === 'true' ? 1 : 0);
+        }
+        
+        // Obtener administradores con paginación
+        const [admins] = await pool.promise().query(`
+            SELECT 
+                id_admin,
+                nombre,
+                correo,
+                rol,
+                celular,
+                fecha_creacion,
+                ultimo_acceso,
+                COALESCE(activo, 1) as activo
+            FROM administradores 
+            ${whereClause}
+            ORDER BY fecha_creacion DESC
+            LIMIT ? OFFSET ?
+        `, [...queryParams, parseInt(limit), parseInt(offset)]);
+        
+        // Obtener total de registros para paginación
+        const [totalCount] = await pool.promise().query(`
+            SELECT COUNT(*) as total 
+            FROM administradores 
+            ${whereClause}
+        `, queryParams);
+        
+        const total = totalCount[0].total;
+        const totalPages = Math.ceil(total / limit);
+        
+        res.status(200).json({
+            message: 'Administradores obtenidos exitosamente',
+            administradores: admins,
+            paginacion: {
+                pagina_actual: parseInt(page),
+                total_paginas: totalPages,
+                total_registros: total,
+                registros_por_pagina: parseInt(limit),
+                tiene_siguiente: page < totalPages,
+                tiene_anterior: page > 1
+            },
+            filtros_aplicados: {
+                rol: rol || 'todos',
+                activo: activo || 'todos'
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener administradores:', error);
+        res.status(500).json({
+            message: 'Error al obtener administradores',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Obtener administrador por ID
+ * GET /api/admin/:id
+ */
+exports.getAdminById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Validar que el ID sea un número válido
+        if (!id || isNaN(id)) {
+            return res.status(400).json({
+                message: 'ID de administrador no válido'
+            });
+        }
+        
+        const [admin] = await pool.promise().query(`
+            SELECT 
+                id_admin,
+                nombre,
+                correo,
+                rol,
+                celular,
+                fecha_creacion,
+                ultimo_acceso,
+                COALESCE(activo, 1) as activo
+            FROM administradores 
+            WHERE id_admin = ?
+        `, [id]);
+        
+        if (admin.length === 0) {
+            return res.status(404).json({
+                message: 'Administrador no encontrado'
+            });
+        }
+        
+        res.status(200).json({
+            message: 'Administrador encontrado',
+            administrador: admin[0]
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener administrador:', error);
+        res.status(500).json({
+            message: 'Error al obtener administrador',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Actualizar administrador
+ * PUT /api/admin/:id
+ */
+exports.updateAdmin = async (req, res) => {
+    let connection;
+    try {
+        connection = await pool.promise().getConnection();
+        await connection.beginTransaction();
+        
+        const { id } = req.params;
+        const { nombre, correo, rol, celular } = req.body;
+        
+        // Validar que el ID sea un número válido
+        if (!id || isNaN(id)) {
+            await connection.rollback();
+            return res.status(400).json({
+                message: 'ID de administrador no válido'
+            });
+        }
+        
+        // Verificar que el administrador existe
+        const [existingAdmin] = await connection.query(
+            'SELECT id_admin, correo FROM administradores WHERE id_admin = ?',
+            [id]
+        );
+        
+        if (existingAdmin.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({
+                message: 'Administrador no encontrado'
+            });
+        }
+        
+        // Validar al menos un campo para actualizar
+        if (!nombre && !correo && !rol && !celular) {
+            await connection.rollback();
+            return res.status(400).json({
+                message: 'Debe proporcionar al menos un campo para actualizar',
+                campos_disponibles: ['nombre', 'correo', 'rol', 'celular']
+            });
+        }
+        
+        // Validar roles permitidos si se especifica
+        if (rol) {
+            const rolesPermitidos = ['super_admin', 'admin', 'moderador'];
+            if (!rolesPermitidos.includes(rol)) {
+                await connection.rollback();
+                return res.status(400).json({
+                    message: 'Rol no válido',
+                    roles_permitidos: rolesPermitidos
+                });
+            }
+        }
+        
+        // Validar formato de email si se especifica
+        if (correo) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(correo)) {
+                await connection.rollback();
+                return res.status(400).json({
+                    message: 'El formato del correo electrónico no es válido'
+                });
+            }
+            
+            // Verificar que el correo no esté en uso por otro administrador
+            if (correo !== existingAdmin[0].correo) {
+                const [emailExists] = await connection.query(
+                    'SELECT id_admin FROM administradores WHERE correo = ? AND id_admin != ?',
+                    [correo, id]
+                );
+                
+                if (emailExists.length > 0) {
+                    await connection.rollback();
+                    return res.status(409).json({
+                        message: 'El correo electrónico ya está en uso por otro administrador'
+                    });
+                }
+            }
+        }
+        
+        // Validar formato de celular si se especifica
+        if (celular) {
+            const celularRegex = /^(\+503\s?)?[67]\d{3}-?\d{4}$/;
+            if (!celularRegex.test(celular)) {
+                await connection.rollback();
+                return res.status(400).json({
+                    message: 'El formato del celular no es válido. Use: +503 7000-0000 o 70000000'
+                });
+            }
+        }
+        
+        // Construir la consulta de actualización dinámicamente
+        const fieldsToUpdate = {};
+        const updateValues = [];
+        
+        if (nombre) {
+            fieldsToUpdate.nombre = '?';
+            updateValues.push(nombre);
+        }
+        if (correo) {
+            fieldsToUpdate.correo = '?';
+            updateValues.push(correo);
+        }
+        if (rol) {
+            fieldsToUpdate.rol = '?';
+            updateValues.push(rol);
+        }
+        if (celular !== undefined) {
+            fieldsToUpdate.celular = '?';
+            updateValues.push(celular);
+        }
+        
+        const setClause = Object.keys(fieldsToUpdate)
+            .map(field => `${field} = ?`)
+            .join(', ');
+        
+        updateValues.push(id);
+        
+        // Ejecutar la actualización
+        await connection.query(`
+            UPDATE administradores 
+            SET ${setClause}
+            WHERE id_admin = ?
+        `, updateValues);
+        
+        // Obtener el administrador actualizado
+        const [updatedAdmin] = await connection.query(`
+            SELECT 
+                id_admin,
+                nombre,
+                correo,
+                rol,
+                celular,
+                fecha_creacion,
+                ultimo_acceso,
+                COALESCE(activo, 1) as activo
+            FROM administradores 
+            WHERE id_admin = ?
+        `, [id]);
+        
+        await connection.commit();
+        
+        res.status(200).json({
+            message: 'Administrador actualizado exitosamente',
+            campos_actualizados: Object.keys(fieldsToUpdate),
+            administrador: updatedAdmin[0]
+        });
+        
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+        }
+        console.error('Error al actualizar administrador:', error);
+        res.status(500).json({
+            message: 'Error al actualizar administrador',
+            error: error.message
+        });
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+};
+
+/**
+ * Eliminar administrador (soft delete)
+ * DELETE /api/admin/:id
+ */
+exports.deleteAdmin = async (req, res) => {
+    let connection;
+    try {
+        connection = await pool.promise().getConnection();
+        await connection.beginTransaction();
+        
+        const { id } = req.params;
+        const { hard_delete = false } = req.body;
+        
+        // Validar que el ID sea un número válido
+        if (!id || isNaN(id)) {
+            await connection.rollback();
+            return res.status(400).json({
+                message: 'ID de administrador no válido'
+            });
+        }
+        
+        // Verificar que el administrador existe
+        const [existingAdmin] = await connection.query(
+            'SELECT id_admin, nombre, rol FROM administradores WHERE id_admin = ?',
+            [id]
+        );
+        
+        if (existingAdmin.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({
+                message: 'Administrador no encontrado'
+            });
+        }
+        
+        const admin = existingAdmin[0];
+        
+        // Prevenir eliminación del último super_admin
+        if (admin.rol === 'super_admin') {
+            const [superAdminCount] = await connection.query(
+                'SELECT COUNT(*) as count FROM administradores WHERE rol = "super_admin" AND COALESCE(activo, 1) = 1'
+            );
+            
+            if (superAdminCount[0].count <= 1) {
+                await connection.rollback();
+                return res.status(400).json({
+                    message: 'No se puede eliminar el último super administrador del sistema'
+                });
+            }
+        }
+        
+        if (hard_delete) {
+            // Eliminación permanente (solo para casos específicos)
+            await connection.query('DELETE FROM administradores WHERE id_admin = ?', [id]);
+            
+            await connection.commit();
+            
+            res.status(200).json({
+                message: 'Administrador eliminado permanentemente',
+                tipo_eliminacion: 'permanente',
+                administrador_eliminado: {
+                    id_admin: admin.id_admin,
+                    nombre: admin.nombre,
+                    rol: admin.rol
+                }
+            });
+        } else {
+            // Soft delete - marcar como inactivo
+            await connection.query(
+                'UPDATE administradores SET activo = 0 WHERE id_admin = ?',
+                [id]
+            );
+            
+            await connection.commit();
+            
+            res.status(200).json({
+                message: 'Administrador desactivado exitosamente',
+                tipo_eliminacion: 'desactivacion',
+                administrador_desactivado: {
+                    id_admin: admin.id_admin,
+                    nombre: admin.nombre,
+                    rol: admin.rol
+                },
+                nota: 'El administrador puede ser reactivado posteriormente'
+            });
+        }
+        
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+        }
+        console.error('Error al eliminar administrador:', error);
+        res.status(500).json({
+            message: 'Error al eliminar administrador',
+            error: error.message
+        });
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+};
+
+/**
+ * Cambiar estado activo/inactivo del administrador
+ * PATCH /api/admin/:id/toggle-status
+ */
+exports.toggleAdminStatus = async (req, res) => {
+    let connection;
+    try {
+        connection = await pool.promise().getConnection();
+        await connection.beginTransaction();
+        
+        const { id } = req.params;
+        
+        // Validar que el ID sea un número válido
+        if (!id || isNaN(id)) {
+            await connection.rollback();
+            return res.status(400).json({
+                message: 'ID de administrador no válido'
+            });
+        }
+        
+        // Verificar que el administrador existe y obtener su estado actual
+        const [existingAdmin] = await connection.query(
+            'SELECT id_admin, nombre, rol, COALESCE(activo, 1) as activo FROM administradores WHERE id_admin = ?',
+            [id]
+        );
+        
+        if (existingAdmin.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({
+                message: 'Administrador no encontrado'
+            });
+        }
+        
+        const admin = existingAdmin[0];
+        const nuevoEstado = admin.activo === 1 ? 0 : 1;
+        
+        // Prevenir desactivación del último super_admin activo
+        if (admin.rol === 'super_admin' && admin.activo === 1) {
+            const [superAdminCount] = await connection.query(
+                'SELECT COUNT(*) as count FROM administradores WHERE rol = "super_admin" AND COALESCE(activo, 1) = 1'
+            );
+            
+            if (superAdminCount[0].count <= 1) {
+                await connection.rollback();
+                return res.status(400).json({
+                    message: 'No se puede desactivar el último super administrador activo'
+                });
+            }
+        }
+        
+        // Actualizar el estado
+        await connection.query(
+            'UPDATE administradores SET activo = ? WHERE id_admin = ?',
+            [nuevoEstado, id]
+        );
+        
+        await connection.commit();
+        
+        res.status(200).json({
+            message: `Administrador ${nuevoEstado === 1 ? 'activado' : 'desactivado'} exitosamente`,
+            administrador: {
+                id_admin: admin.id_admin,
+                nombre: admin.nombre,
+                rol: admin.rol,
+                estado_anterior: admin.activo === 1 ? 'activo' : 'inactivo',
+                estado_actual: nuevoEstado === 1 ? 'activo' : 'inactivo'
+            }
+        });
+        
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+        }
+        console.error('Error al cambiar estado del administrador:', error);
+        res.status(500).json({
+            message: 'Error al cambiar estado del administrador',
+            error: error.message
+        });
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+};
+
+/**
+ * Obtener estadísticas de administradores
+ * GET /api/admin/stats
+ */
+exports.getAdminStats = async (req, res) => {
+    try {
+        // Estadísticas generales
+        const [generalStats] = await pool.promise().query(`
+            SELECT 
+                COUNT(*) as total_administradores,
+                SUM(CASE WHEN COALESCE(activo, 1) = 1 THEN 1 ELSE 0 END) as administradores_activos,
+                SUM(CASE WHEN COALESCE(activo, 1) = 0 THEN 1 ELSE 0 END) as administradores_inactivos
+            FROM administradores
+        `);
+        
+        // Estadísticas por rol
+        const [roleStats] = await pool.promise().query(`
+            SELECT 
+                rol,
+                COUNT(*) as total,
+                SUM(CASE WHEN COALESCE(activo, 1) = 1 THEN 1 ELSE 0 END) as activos,
+                SUM(CASE WHEN COALESCE(activo, 1) = 0 THEN 1 ELSE 0 END) as inactivos
+            FROM administradores
+            GROUP BY rol
+            ORDER BY 
+                CASE rol 
+                    WHEN 'super_admin' THEN 1 
+                    WHEN 'admin' THEN 2 
+                    WHEN 'moderador' THEN 3 
+                    ELSE 4 
+                END
+        `);
+        
+        // Últimos administradores creados
+        const [recentAdmins] = await pool.promise().query(`
+            SELECT 
+                id_admin,
+                nombre,
+                rol,
+                fecha_creacion,
+                COALESCE(activo, 1) as activo
+            FROM administradores
+            ORDER BY fecha_creacion DESC
+            LIMIT 5
+        `);
+        
+        // Administradores con acceso reciente
+        const [recentAccess] = await pool.promise().query(`
+            SELECT 
+                id_admin,
+                nombre,
+                rol,
+                ultimo_acceso,
+                COALESCE(activo, 1) as activo
+            FROM administradores
+            WHERE ultimo_acceso IS NOT NULL
+            ORDER BY ultimo_acceso DESC
+            LIMIT 5
+        `);
+        
+        res.status(200).json({
+            message: 'Estadísticas de administradores obtenidas exitosamente',
+            estadisticas: {
+                resumen_general: generalStats[0],
+                distribucion_por_rol: roleStats,
+                administradores_recientes: recentAdmins,
+                accesos_recientes: recentAccess
+            },
+            generado_en: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener estadísticas de administradores:', error);
+        res.status(500).json({
+            message: 'Error al obtener estadísticas de administradores',
+            error: error.message
+        });
+    }
 };

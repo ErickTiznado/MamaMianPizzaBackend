@@ -1,0 +1,430 @@
+{
+  "info": {
+    "name": "Admin Management API Tests",
+    "description": "Complete test collection for administrator CRUD operations in Mama Mian Pizza API",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api/users",
+      "type": "string"
+    },
+    {
+      "key": "admin_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "test_email",
+      "value": "admin.test@mamamianpizza.com",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Create New Admin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Test Admin\",\n  \"correo\": \"{{test_email}}\",\n  \"contrasena\": \"AdminTest123!\",\n  \"rol\": \"admin\",\n  \"celular\": \"+503 7000-1234\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/admins",
+          "host": ["{{base_url}}"],
+          "path": ["admins"]
+        },
+        "description": "Creates a new administrator with all required fields"
+      },
+      "response": []
+    },
+    {
+      "name": "2. Get All Admins (Basic)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/admins/all",
+          "host": ["{{base_url}}"],
+          "path": ["admins", "all"]
+        },
+        "description": "Gets all administrators with default pagination"
+      },
+      "response": []
+    },
+    {
+      "name": "3. Get All Admins (With Pagination)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/admins/all?page=1&limit=5",
+          "host": ["{{base_url}}"],
+          "path": ["admins", "all"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "5"
+            }
+          ]
+        },
+        "description": "Gets administrators with custom pagination settings"
+      },
+      "response": []
+    },
+    {
+      "name": "4. Get All Admins (Filtered by Role)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/admins/all?rol=admin&activo=true",
+          "host": ["{{base_url}}"],
+          "path": ["admins", "all"],
+          "query": [
+            {
+              "key": "rol",
+              "value": "admin"
+            },
+            {
+              "key": "activo",
+              "value": "true"
+            }
+          ]
+        },
+        "description": "Gets administrators filtered by role and active status"
+      },
+      "response": []
+    },
+    {
+      "name": "5. Get Admin by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/admins/{{admin_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["admins", "{{admin_id}}"]
+        },
+        "description": "Gets a specific administrator by their ID"
+      },
+      "response": []
+    },
+    {
+      "name": "6. Update Admin (Partial)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Test Admin Updated\",\n  \"celular\": \"+503 7000-5678\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/admins/{{admin_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["admins", "{{admin_id}}"]
+        },
+        "description": "Updates specific fields of an administrator"
+      },
+      "response": []
+    },
+    {
+      "name": "7. Update Admin (Complete)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Test Admin Complete Update\",\n  \"correo\": \"updated.admin@mamamianpizza.com\",\n  \"rol\": \"moderador\",\n  \"celular\": \"+503 7000-9999\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/admins/{{admin_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["admins", "{{admin_id}}"]
+        },
+        "description": "Updates all fields of an administrator"
+      },
+      "response": []
+    },
+    {
+      "name": "8. Get Admin Stats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/admins/stats",
+          "host": ["{{base_url}}"],
+          "path": ["admins", "stats"]
+        },
+        "description": "Gets comprehensive statistics about administrators"
+      },
+      "response": []
+    },
+    {
+      "name": "9. Toggle Admin Status (Deactivate)",
+      "request": {
+        "method": "PATCH",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/admins/{{admin_id}}/toggle-status",
+          "host": ["{{base_url}}"],
+          "path": ["admins", "{{admin_id}}", "toggle-status"]
+        },
+        "description": "Toggles the active status of an administrator (first call deactivates)"
+      },
+      "response": []
+    },
+    {
+      "name": "10. Toggle Admin Status (Reactivate)",
+      "request": {
+        "method": "PATCH",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/admins/{{admin_id}}/toggle-status",
+          "host": ["{{base_url}}"],
+          "path": ["admins", "{{admin_id}}", "toggle-status"]
+        },
+        "description": "Toggles the active status of an administrator (second call reactivates)"
+      },
+      "response": []
+    },
+    {
+      "name": "11. Soft Delete Admin",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"hard_delete\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/admins/{{admin_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["admins", "{{admin_id}}"]
+        },
+        "description": "Soft deletes an administrator (marks as inactive)"
+      },
+      "response": []
+    },
+    {
+      "name": "12. Hard Delete Admin",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"hard_delete\": true\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/admins/{{admin_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["admins", "{{admin_id}}"]
+        },
+        "description": "Permanently deletes an administrator from the database"
+      },
+      "response": []
+    },
+    {
+      "name": "ERROR CASES",
+      "item": [
+        {
+          "name": "Invalid Admin ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admins/invalid_id",
+              "host": ["{{base_url}}"],
+              "path": ["admins", "invalid_id"]
+            },
+            "description": "Tests error handling for invalid admin ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Non-existent Admin",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admins/99999",
+              "host": ["{{base_url}}"],
+              "path": ["admins", "99999"]
+            },
+            "description": "Tests error handling for non-existent admin"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Invalid Role Admin\",\n  \"correo\": \"invalid.role@test.com\",\n  \"contrasena\": \"Password123!\",\n  \"rol\": \"invalid_role\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admins",
+              "host": ["{{base_url}}"],
+              "path": ["admins"]
+            },
+            "description": "Tests error handling for invalid role values"
+          },
+          "response": []
+        },
+        {
+          "name": "Duplicate Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Duplicate Email Admin\",\n  \"correo\": \"{{test_email}}\",\n  \"contrasena\": \"Password123!\",\n  \"rol\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admins",
+              "host": ["{{base_url}}"],
+              "path": ["admins"]
+            },
+            "description": "Tests error handling for duplicate email addresses"
+          },
+          "response": []
+        },
+        {
+          "name": "Missing Required Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Incomplete Admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admins",
+              "host": ["{{base_url}}"],
+              "path": ["admins"]
+            },
+            "description": "Tests error handling for missing required fields"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Email Format",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Invalid Email Admin\",\n  \"correo\": \"invalid-email-format\",\n  \"contrasena\": \"Password123!\",\n  \"rol\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admins",
+              "host": ["{{base_url}}"],
+              "path": ["admins"]
+            },
+            "description": "Tests error handling for invalid email format"
+          },
+          "response": []
+        },
+        {
+          "name": "Weak Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Weak Password Admin\",\n  \"correo\": \"weak.password@test.com\",\n  \"contrasena\": \"123\",\n  \"rol\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admins",
+              "host": ["{{base_url}}"],
+              "path": ["admins"]
+            },
+            "description": "Tests error handling for weak passwords"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Phone Format",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Invalid Phone Admin\",\n  \"correo\": \"invalid.phone@test.com\",\n  \"contrasena\": \"Password123!\",\n  \"rol\": \"admin\",\n  \"celular\": \"invalid-phone\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admins",
+              "host": ["{{base_url}}"],
+              "path": ["admins"]
+            },
+            "description": "Tests error handling for invalid phone number format"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
