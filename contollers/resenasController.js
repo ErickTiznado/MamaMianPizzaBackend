@@ -240,13 +240,18 @@ exports.getResenasByUser = async (req, res) => {
                     message: 'Usuario no encontrado'
                 });
             }
+              // Calculate approval statistics
+            const resenas_aprobadas = reviews.filter(r => r.aprobada === 1).length;
+            const resenas_pendientes = reviews.filter(r => r.aprobada === 0).length;
             
             res.status(200).json({
                 message: 'Reseñas del usuario obtenidas exitosamente',
                 usuario: {
                     id_usuario: parseInt(id_usuario),
                     nombre_usuario: userInfo[0].nombre,
-                    total_resenas: reviews.length
+                    total_resenas: reviews.length,
+                    resenas_aprobadas: resenas_aprobadas,
+                    resenas_pendientes: resenas_pendientes
                 },
                 resenas: reviews.map(review => ({
                     id_resena: review.id_resena,
@@ -254,6 +259,8 @@ exports.getResenasByUser = async (req, res) => {
                     nombre_producto: review.nombre_producto,
                     comentario: review.comentario,
                     valoracion: review.valoracion,
+                    aprobada: review.aprobada,
+                    estado: review.aprobada === 1 ? 'aprobada' : 'pendiente',
                     fecha_creacion: review.fecha_creacion
                 }))
             });
@@ -276,8 +283,7 @@ exports.getAllResenas = async (req, res) => {
     try {
         const connection = await pool.promise().getConnection();
         
-        try {
-            // Get all reviews with user and product information
+        try {            // Get all reviews with user and product information
             const [reviews] = await connection.query(`
                 SELECT 
                     r.id_resena,
@@ -285,6 +291,7 @@ exports.getAllResenas = async (req, res) => {
                     r.id_producto,
                     r.comentario,
                     r.valoracion,
+                    r.aprobada,
                     r.fecha_creacion,
                     u.nombre as nombre_usuario,
                     p.titulo as nombre_producto
@@ -293,8 +300,7 @@ exports.getAllResenas = async (req, res) => {
                 JOIN productos p ON r.id_producto = p.id_producto
                 ORDER BY r.fecha_creacion DESC
             `);
-            
-            // Get summary statistics
+              // Get summary statistics
             const [stats] = await connection.query(`
                 SELECT 
                     COUNT(*) as total_resenas,
@@ -302,17 +308,20 @@ exports.getAllResenas = async (req, res) => {
                     COUNT(DISTINCT id_usuario) as usuarios_activos,
                     COUNT(DISTINCT id_producto) as productos_resenados,
                     MIN(fecha_creacion) as primera_resena,
-                    MAX(fecha_creacion) as ultima_resena
+                    MAX(fecha_creacion) as ultima_resena,
+                    SUM(CASE WHEN aprobada = 1 THEN 1 ELSE 0 END) as resenas_aprobadas,
+                    SUM(CASE WHEN aprobada = 0 THEN 1 ELSE 0 END) as resenas_pendientes
                 FROM resenas
             `);
             
             res.status(200).json({
-                message: 'Todas las reseñas obtenidas exitosamente',
-                estadisticas: {
+                message: 'Todas las reseñas obtenidas exitosamente',                estadisticas: {
                     total_resenas: parseInt(stats[0].total_resenas || 0),
                     valoracion_promedio: parseFloat(stats[0].valoracion_promedio || 0).toFixed(1),
                     usuarios_activos: parseInt(stats[0].usuarios_activos || 0),
                     productos_resenados: parseInt(stats[0].productos_resenados || 0),
+                    resenas_aprobadas: parseInt(stats[0].resenas_aprobadas || 0),
+                    resenas_pendientes: parseInt(stats[0].resenas_pendientes || 0),
                     primera_resena: stats[0].primera_resena,
                     ultima_resena: stats[0].ultima_resena
                 },
@@ -329,6 +338,8 @@ exports.getAllResenas = async (req, res) => {
                     },
                     comentario: review.comentario,
                     valoracion: review.valoracion,
+                    aprobada: review.aprobada,
+                    estado: review.aprobada === 1 ? 'aprobada' : 'pendiente',
                     fecha_creacion: review.fecha_creacion
                 }))
             });
