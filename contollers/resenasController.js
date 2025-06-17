@@ -240,13 +240,18 @@ exports.getResenasByUser = async (req, res) => {
                     message: 'Usuario no encontrado'
                 });
             }
+              // Calculate approval statistics
+            const resenas_aprobadas = reviews.filter(r => r.aprobada === 1).length;
+            const resenas_pendientes = reviews.filter(r => r.aprobada === 0).length;
             
             res.status(200).json({
                 message: 'Reseñas del usuario obtenidas exitosamente',
                 usuario: {
                     id_usuario: parseInt(id_usuario),
                     nombre_usuario: userInfo[0].nombre,
-                    total_resenas: reviews.length
+                    total_resenas: reviews.length,
+                    resenas_aprobadas: resenas_aprobadas,
+                    resenas_pendientes: resenas_pendientes
                 },
                 resenas: reviews.map(review => ({
                     id_resena: review.id_resena,
@@ -254,6 +259,8 @@ exports.getResenasByUser = async (req, res) => {
                     nombre_producto: review.nombre_producto,
                     comentario: review.comentario,
                     valoracion: review.valoracion,
+                    aprobada: review.aprobada,
+                    estado: review.aprobada === 1 ? 'aprobada' : 'pendiente',
                     fecha_creacion: review.fecha_creacion
                 }))
             });
