@@ -321,7 +321,389 @@ const templatePasswordChanged = (nombre) => {
     `;
 };
 
+// Template para código de verificación de restablecimiento de contraseña - ADMINISTRADORES
+const templatePasswordResetAdmin = (nombre, otp, tiempoExpiracion = 10) => {
+    return `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Código de Verificación Admin - Mama Mian Pizza</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                background-color: #f4f4f4;
+            }
+            
+            .container {
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            
+            .header {
+                background: linear-gradient(135deg, #8B4513, #A0522D);
+                padding: 30px 20px;
+                text-align: center;
+                color: white;
+            }
+            
+            .logo {
+                font-size: 28px;
+                font-weight: bold;
+                margin-bottom: 10px;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            }
+            
+            .subtitle {
+                font-size: 16px;
+                opacity: 0.9;
+                text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            }
+            
+            .admin-badge {
+                background: rgba(255,255,255,0.2);
+                padding: 5px 15px;
+                border-radius: 15px;
+                display: inline-block;
+                margin-top: 10px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            
+            .content {
+                padding: 40px 30px;
+            }
+            
+            .greeting {
+                font-size: 18px;
+                margin-bottom: 20px;
+                color: #8B4513;
+                font-weight: 600;
+            }
+            
+            .otp-section {
+                background: linear-gradient(135deg, #FFF8DC, #F5E6D3);
+                border: 2px solid #8B4513;
+                border-radius: 12px;
+                padding: 30px;
+                text-align: center;
+                margin: 30px 0;
+            }
+            
+            .otp-label {
+                font-size: 16px;
+                color: #8B4513;
+                margin-bottom: 15px;
+                font-weight: 600;
+            }
+            
+            .otp-code {
+                font-size: 42px;
+                font-weight: bold;
+                color: #8B4513;
+                letter-spacing: 8px;
+                font-family: 'Courier New', monospace;
+                margin: 15px 0;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            }
+            
+            .expiration {
+                color: #B8860B;
+                font-size: 14px;
+                font-weight: 600;
+                margin-top: 10px;
+            }
+            
+            .message {
+                font-size: 16px;
+                line-height: 1.8;
+                margin-bottom: 20px;
+                color: #555;
+            }
+            
+            .security-warning {
+                background: #FFF3CD;
+                border-left: 4px solid #8B4513;
+                padding: 15px;
+                margin: 20px 0;
+                border-radius: 0 8px 8px 0;
+            }
+            
+            .warning-title {
+                color: #8B4513;
+                font-weight: bold;
+                margin-bottom: 5px;
+            }
+            
+            .warning-text {
+                color: #856404;
+                font-size: 14px;
+            }
+            
+            .footer {
+                background-color: #8B4513;
+                color: white;
+                text-align: center;
+                padding: 20px;
+                font-size: 14px;
+            }
+            
+            .footer a {
+                color: #F5E6D3;
+                text-decoration: none;
+            }
+            
+            .timestamp {
+                color: #999;
+                font-size: 12px;
+                margin-top: 15px;
+                font-style: italic;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">🍕 MAMA MIAN PIZZA</div>
+                <div class="subtitle">Sistema de Administración</div>
+                <div class="admin-badge">👨‍💼 ADMINISTRADOR</div>
+            </div>
+            
+            <div class="content">
+                <div class="greeting">Hola ${nombre},</div>
+                
+                <div class="message">
+                    Hemos recibido una solicitud para restablecer la contraseña de tu cuenta de administrador. 
+                    Utiliza el siguiente código de verificación para continuar con el proceso:
+                </div>
+                
+                <div class="otp-section">
+                    <div class="otp-label">Código de Verificación</div>
+                    <div class="otp-code">${otp}</div>
+                    <div class="expiration">Válido por ${tiempoExpiracion} minutos</div>
+                </div>
+                
+                <div class="message">
+                    Ingresa este código en el formulario de restablecimiento para continuar. 
+                    Una vez verificado, podrás establecer una nueva contraseña segura.
+                </div>
+                
+                <div class="security-warning">
+                    <div class="warning-title">⚠️ Aviso de Seguridad</div>
+                    <div class="warning-text">
+                        • Este código es exclusivamente para administradores<br>
+                        • No compartas este código con nadie<br>
+                        • Si no solicitaste este cambio, contacta inmediatamente al administrador principal<br>
+                        • El código expirará automáticamente en ${tiempoExpiracion} minutos
+                    </div>
+                </div>
+                
+                <div class="timestamp">
+                    Código generado el ${getFechaActual()} a las ${new Date().toLocaleTimeString('es-ES', { timeZone: 'America/El_Salvador' })}
+                </div>
+            </div>
+            
+            <div class="footer">
+                <div>© ${new Date().getFullYear()} Mama Mian Pizza - Panel de Administración</div>
+                <div style="margin-top: 5px;">
+                    <a href="mailto:admin@mamamianpizza.com">admin@mamamianpizza.com</a>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+};
+
+// Template para confirmación de cambio de contraseña - ADMINISTRADORES
+const templatePasswordChangedAdmin = (nombre) => {
+    return `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Contraseña Actualizada - Admin Mama Mian Pizza</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                background-color: #f4f4f4;
+            }
+            
+            .container {
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            
+            .header {
+                background: linear-gradient(135deg, #228B22, #32CD32);
+                padding: 30px 20px;
+                text-align: center;
+                color: white;
+            }
+            
+            .logo {
+                font-size: 28px;
+                font-weight: bold;
+                margin-bottom: 10px;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            }
+            
+            .subtitle {
+                font-size: 16px;
+                opacity: 0.9;
+                text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            }
+            
+            .admin-badge {
+                background: rgba(255,255,255,0.2);
+                padding: 5px 15px;
+                border-radius: 15px;
+                display: inline-block;
+                margin-top: 10px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            
+            .content {
+                padding: 40px 30px;
+            }
+            
+            .success-icon {
+                text-align: center;
+                font-size: 48px;
+                margin-bottom: 20px;
+            }
+            
+            .message {
+                font-size: 16px;
+                line-height: 1.8;
+                margin-bottom: 25px;
+                color: #555;
+                text-align: center;
+            }
+            
+            .security-info {
+                background: #E8F5E8;
+                border-left: 4px solid #228B22;
+                padding: 20px;
+                margin: 25px 0;
+                border-radius: 0 8px 8px 0;
+            }
+            
+            .security-title {
+                color: #228B22;
+                font-weight: bold;
+                margin-bottom: 10px;
+                font-size: 16px;
+            }
+            
+            .security-text {
+                color: #2F5F2F;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+            
+            .footer {
+                background-color: #228B22;
+                color: white;
+                text-align: center;
+                padding: 20px;
+                font-size: 14px;
+            }
+            
+            .footer a {
+                color: #90EE90;
+                text-decoration: none;
+            }
+            
+            .timestamp {
+                color: #999;
+                font-size: 12px;
+                margin-top: 20px;
+                text-align: center;
+                font-style: italic;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">🍕 MAMA MIAN PIZZA</div>
+                <div class="subtitle">Sistema de Administración</div>
+                <div class="admin-badge">👨‍💼 ADMINISTRADOR</div>
+            </div>
+            
+            <div class="content">
+                <div class="success-icon">✅</div>
+                
+                <h2 style="text-align: center; color: #228B22; margin-bottom: 20px;">¡Contraseña Actualizada Exitosamente!</h2>
+                
+                <div class="message">
+                    Hola ${nombre},<br><br>
+                    Tu contraseña de administrador ha sido cambiada exitosamente. Ya puedes iniciar sesión en el panel de administración con tu nueva contraseña.
+                </div>
+                
+                <div class="security-info">
+                    <div class="security-title">🔐 Información de Seguridad</div>
+                    <div class="security-text">
+                        • Tu contraseña ha sido actualizada con encriptación de alta seguridad<br>
+                        • Se han invalidado todas las sesiones activas<br>
+                        • Recomendamos usar autenticación de dos factores<br>
+                        • Cambia tu contraseña regularmente para mantener la seguridad
+                    </div>
+                </div>
+                
+                <div class="message">
+                    Si no realizaste este cambio o detectas alguna actividad sospechosa, 
+                    contacta inmediatamente al administrador principal del sistema.
+                </div>
+                
+                <div class="timestamp">
+                    Contraseña actualizada el ${getFechaActual()} a las ${new Date().toLocaleTimeString('es-ES', { timeZone: 'America/El_Salvador' })}
+                </div>
+            </div>
+            
+            <div class="footer">
+                <div>© ${new Date().getFullYear()} Mama Mian Pizza - Panel de Administración</div>
+                <div style="margin-top: 5px;">
+                    <a href="mailto:admin@mamamianpizza.com">admin@mamamianpizza.com</a>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+};
+
 module.exports = {
     templatePasswordReset,
-    templatePasswordChanged
+    templatePasswordChanged,
+    templatePasswordResetAdmin,
+    templatePasswordChangedAdmin
 };
