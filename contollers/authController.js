@@ -917,3 +917,267 @@ exports.resetPasswordAdmin = async (req, res) => {
         });
     }
 };
+
+// ============================
+// CAMBIO DE CONTRASEÑA PARA USUARIOS AUTENTICADOS
+// ============================
+
+// Endpoint PUT /auth/change-password
+exports.changePassword = async (req, res) => {
+    try {
+        const { id_usuario, contrasenaActual, nuevaContrasena } = req.body;
+        
+        // Validate input
+        if (!id_usuario || !contrasenaActual || !nuevaContrasena) {
+            return res.status(400).json({
+                message: 'ID de usuario, contraseña actual y nueva contraseña son requeridos'
+            });
+        }
+        
+        // Validate password strength
+        if (nuevaContrasena.length < 8) {
+            return res.status(400).json({
+                message: 'La nueva contraseña debe tener al menos 8 caracteres'
+            });
+        }
+        
+        // Get user data
+        pool.query(
+            'SELECT id_usuario, nombre, correo, contrasena FROM usuarios WHERE id_usuario = ?',
+            [id_usuario],
+            async (err, userResults) => {
+                if (err) {
+                    console.error('Error al buscar usuario:', err);
+                    return res.status(500).json({
+                        message: 'Error interno del servidor',
+                        error: err.message
+                    });
+                }
+                
+                if (userResults.length === 0) {
+                    return res.status(404).json({
+                        message: 'Usuario no encontrado'
+                    });
+                }
+                
+                const user = userResults[0];
+                
+                // Verify current password
+                const isCurrentPasswordValid = await bcrypt.compare(contrasenaActual, user.contrasena);
+                if (!isCurrentPasswordValid) {
+                    return res.status(401).json({
+                        message: 'La contraseña actual es incorrecta'
+                    });
+                }
+                
+                // Check if new password is different from current
+                const isSamePassword = await bcrypt.compare(nuevaContrasena, user.contrasena);
+                if (isSamePassword) {
+                    return res.status(400).json({
+                        message: 'La nueva contraseña debe ser diferente a la contraseña actual'
+                    });
+                }
+                
+                // Hash new password
+                const saltRounds = 12;
+                const hashedNewPassword = await bcrypt.hash(nuevaContrasena, saltRounds);
+                
+                // Update password in database
+                pool.query(
+                    'UPDATE usuarios SET contrasena = ? WHERE id_usuario = ?',
+                    [hashedNewPassword, id_usuario],
+                    async (updateErr, updateResults) => {
+                        if (updateErr) {
+                            console.error('Error al actualizar contraseña:', updateErr);
+                            return res.status(500).json({
+                                message: 'Error al actualizar la contraseña',
+                                error: updateErr.message
+                            });
+                        }
+                        
+                        if (updateResults.affectedRows === 0) {
+                            return res.status(404).json({
+                                message: 'Usuario no encontrado'
+                            });
+                        }
+                        
+                        // Send confirmation email (optional, non-blocking)
+                        if (user.correo) {
+                            try {
+                                console.log(`📧 Enviando confirmación de cambio de contraseña a: ${user.correo}`);
+                                const resultadoConfirmacion = await enviarCorreo(user.correo, user.nombre, null, 'password_changed');
+                                
+                                if (resultadoConfirmacion.success) {
+                                    console.log(`✅ Correo de confirmación enviado exitosamente`);
+                                } else {
+                                    console.error(`❌ Error enviando confirmación: ${resultadoConfirmacion.error}`);
+                                }
+                            } catch (confirmationError) {
+                                console.error('Error al enviar correo de confirmación:', confirmationError.message);
+                                // No afecta la respuesta principal
+                            }
+                        }
+                        
+                        res.status(200).json({
+                            success: true,
+                            message: 'Contraseña cambiada exitosamente',
+                            usuario: user.nombre,
+                            timestamp: new Date().toISOString(),
+                            correo_confirmacion: user.correo ? 'enviado' : 'no_disponible'
+                        });
+                    }
+                );
+            }
+        );
+        
+    } catch (error) {
+        console.error('Error en changePassword:', error);
+        res.status(500).json({
+            message: 'Error interno del servidor',
+            error: error.message
+        });
+    }
+};
+
+// ============================
+// ENDPOINT PARA CAMBIO DIRECTO DE CONTRASEÑA ADMINISTRADORES
+// ============================
+
+// Endpoint PUT /auth/admin/change-password
+exports.changePasswordAdmin = async (req, res) => {
+    try {
+        const { correo, contrasenaActual, nuevaContrasena } = req.body;
+        
+        // Validate input
+        if (!correo || !contrasenaActual || !nuevaContrasena) {
+            return res.status(400).json({
+                message: 'Correo, contraseña actual y nueva contraseña son requeridos'
+            });
+        }
+        
+        // Validate email format
+        if (!validateEmail(correo)) {
+            return res.status(400).json({
+                message: 'Formato de correo electrónico inválido'
+            });
+        }
+        
+        // Validate password strength
+        if (nuevaContrasena.length < 8) {
+            return res.status(400).json({
+                message: 'La nueva contraseña debe tener al menos 8 caracteres'
+            });
+        }
+        
+        // Verificar que la nueva contraseña sea diferente a la actual
+        if (contrasenaActual === nuevaContrasena) {
+            return res.status(400).json({
+                message: 'La nueva contraseña debe ser diferente a la contraseña actual'
+            });
+        }
+        
+        // Find admin by email
+        pool.query(
+            'SELECT id_admin, nombre, correo, contrasena FROM administradores WHERE correo = ?',
+            [correo],
+            async (err, adminResults) => {
+                if (err) {
+                    console.error('Error al buscar administrador:', err);
+                    return res.status(500).json({
+                        message: 'Error interno del servidor',
+                        error: err.message
+                    });
+                }
+                
+                if (adminResults.length === 0) {
+                    return res.status(404).json({
+                        message: 'No se encontró un administrador con este correo electrónico'
+                    });
+                }
+                
+                const admin = adminResults[0];
+                
+                // Verify current password
+                const isCurrentPasswordValid = await bcrypt.compare(contrasenaActual, admin.contrasena);
+                
+                if (!isCurrentPasswordValid) {
+                    return res.status(401).json({
+                        message: 'La contraseña actual es incorrecta'
+                    });
+                }
+                
+                // Hash new password with higher security for admins
+                const saltRounds = 12;
+                const hashedNewPassword = await bcrypt.hash(nuevaContrasena, saltRounds);
+                
+                // Update admin password
+                pool.query(
+                    'UPDATE administradores SET contrasena = ? WHERE id_admin = ?',
+                    [hashedNewPassword, admin.id_admin],
+                    (updateErr, updateResults) => {
+                        if (updateErr) {
+                            console.error('Error al actualizar contraseña del administrador:', updateErr);
+                            return res.status(500).json({
+                                message: 'Error al actualizar la contraseña',
+                                error: updateErr.message
+                            });
+                        }
+                        
+                        if (updateResults.affectedRows === 0) {
+                            return res.status(404).json({
+                                message: 'Error al actualizar: administrador no encontrado'
+                            });
+                        }
+                        
+                        // Log the password change for security
+                        console.log(`🔐 Contraseña de administrador cambiada exitosamente:`);
+                        console.log(`   📧 Admin: ${admin.correo}`);
+                        console.log(`   👤 Nombre: ${admin.nombre}`);
+                        console.log(`   🕒 Timestamp: ${new Date().toISOString()}`);
+                        
+                        // Send confirmation email (optional)
+                        (async () => {
+                            try {
+                                console.log(`📧 Enviando confirmación de cambio de contraseña a: ${admin.correo}`);
+                                const resultadoConfirmacion = await enviarCorreoAdmin(
+                                    admin.correo, 
+                                    admin.nombre, 
+                                    null, 
+                                    'password_changed'
+                                );
+                                
+                                if (resultadoConfirmacion.success) {
+                                    console.log(`✅ Correo de confirmación enviado exitosamente`);
+                                } else {
+                                    console.error(`❌ Error enviando confirmación: ${resultadoConfirmacion.error}`);
+                                }
+                            } catch (confirmationError) {
+                                console.error('Error al enviar correo de confirmación:', confirmationError.message);
+                            }
+                        })();
+                        
+                        res.status(200).json({
+                            success: true,
+                            message: 'Contraseña de administrador cambiada exitosamente',
+                            administrador: {
+                                id: admin.id_admin,
+                                nombre: admin.nombre,
+                                correo: admin.correo
+                            },
+                            timestamp: new Date().toISOString(),
+                            correo_confirmacion: 'enviado',
+                            tipo_usuario: 'administrador'
+                        });
+                    }
+                );
+            }
+        );
+        
+    } catch (error) {
+        console.error('Error en changePasswordAdmin:', error);
+        res.status(500).json({
+            message: 'Error interno del servidor',
+            error: error.message
+        });
+    }
+};
