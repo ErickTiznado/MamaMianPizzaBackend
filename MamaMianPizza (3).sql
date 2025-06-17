@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: vps.mamamianpizza.com
--- Tiempo de generación: 17-06-2025 a las 07:10:17
+-- Tiempo de generación: 17-06-2025 a las 21:30:53
 -- Versión del servidor: 8.4.5
 -- Versión de PHP: 8.3.19
 
@@ -33,8 +33,17 @@ CREATE TABLE `administradores` (
   `correo` varchar(100) NOT NULL,
   `contrasena` varchar(255) NOT NULL,
   `rol` varchar(50) NOT NULL,
-  `celular` varchar(20) DEFAULT NULL
+  `celular` varchar(20) DEFAULT NULL,
+  `fecha_creacion` timestamp NOT NULL,
+  `ultimo_acceso` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `administradores`
+--
+
+INSERT INTO `administradores` (`id_admin`, `nombre`, `correo`, `contrasena`, `rol`, `celular`, `fecha_creacion`, `ultimo_acceso`) VALUES
+(1, 'Erick Mauricio Tiznado', 'tiznadoerick3@gmail.com', '$2b$12$0t6cjTMqUG7lCcY.1OLuzuHFytil8fliMFxl2loe0OrmALpOCmi72', 'super_admin', '+503 7083-0446', '2025-06-17 17:15:07', NULL);
 
 -- --------------------------------------------------------
 
@@ -117,7 +126,12 @@ INSERT INTO `detalle_pedidos` (`id_detalle`, `id_pedido`, `id_producto`, `nombre
 (20, 15, 3, 'Cheese Sticks con Salsa1', 1, 4.00, 'Tradicional', 'personal', 'Ingredientes extra: Loroco, Camaron, Jalapeño, Champiñones', 0, 4.00),
 (21, 16, 4, 'Pizza de peperoni', 1, 4.00, 'Tradicional', 'Personal', 'Caliente', 0, 4.00),
 (22, 17, 4, 'Pizza de peperoni', 1, 4.00, 'Tradicional', 'Personal', 'Caliente', 0, 4.00),
-(23, 18, 3, 'Cheese Sticks con Salsa1', 1, 4.00, NULL, NULL, NULL, 0, 4.00);
+(23, 18, 3, 'Cheese Sticks con Salsa1', 1, 4.00, NULL, NULL, NULL, 0, 4.00),
+(24, 19, 4, 'Pizza de peperoni', 1, 4.00, 'Tradicional', 'Personal', NULL, 0, 4.00),
+(25, 20, 4, 'Pizza de peperoni', 1, 4.00, 'Tradicional', 'Personal', NULL, 0, 4.00),
+(26, 21, 4, 'Pizza de peperoni', 1, 4.00, 'Tradicional', 'Personal', NULL, 0, 4.00),
+(27, 22, 4, 'Pizza de peperoni', 1, 4.00, 'Tradicional', 'Personal', NULL, 0, 4.00),
+(28, 23, 3, 'Cheese Sticks con Salsa11', 1, 4.00, 'Tradicional', 'Personal', NULL, 0, 4.00);
 
 -- --------------------------------------------------------
 
@@ -162,7 +176,12 @@ INSERT INTO `direcciones` (`id_direccion`, `id_usuario`, `direccion`, `referenci
 (15, 11, 'En el Local - Pedido creado por Administrador', NULL, 'formulario', 'El Salvador', 'San Salvador', 'San Salvador', NULL, NULL, NULL, NULL),
 (16, 12, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL),
 (17, 12, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL),
-(18, 4, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL);
+(18, 4, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL),
+(19, 13, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL),
+(20, 14, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL),
+(21, 15, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL),
+(22, 4, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL),
+(23, 4, 'CP #3417, Puerto El Triunfo, EL salvador', NULL, 'formulario', 'El Salvador', 'Usulután', 'Jiquilisco', NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -176,8 +195,16 @@ CREATE TABLE `experiencia` (
   `valoracion` tinyint NOT NULL COMMENT '1–5 estrellas',
   `id_usuario` int NOT NULL,
   `contenido` text NOT NULL,
+  `ruta_foto` varchar(255) DEFAULT NULL COMMENT 'URL o ruta de la foto de perfil asociada',
   `aprobado` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0=no visible, 1=visible'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `experiencia`
+--
+
+INSERT INTO `experiencia` (`id_experiencia`, `titulo`, `valoracion`, `id_usuario`, `contenido`, `ruta_foto`, `aprobado`) VALUES
+(1, 'dfsfsdf', 5, 4, 'sdfsdfsdfsdf', NULL, 0);
 
 -- --------------------------------------------------------
 
@@ -293,7 +320,12 @@ INSERT INTO `notificaciones` (`id_notificacion`, `titulo`, `mensaje`, `tipo`, `f
 (18, 'Estado de pedido actualizado', 'Pedido #JSEEVCSE ahora está: en proceso', 'success', '2025-06-16 04:46:54', 'no leida'),
 (19, 'Nuevo Pedido', 'Pedido G7AW9Q18 por $4.52', 'pedido', '2025-06-16 16:31:19', 'no leida'),
 (20, 'Nuevo Pedido', 'Pedido 3L4LN329 por $4.52', 'pedido', '2025-06-16 16:31:19', 'no leida'),
-(21, 'Nuevo Pedido', 'Pedido AE4ZC6RH por $4.52', 'pedido', '2025-06-16 16:31:21', 'no leida');
+(21, 'Nuevo Pedido', 'Pedido AE4ZC6RH por $4.52', 'pedido', '2025-06-16 16:31:21', 'no leida'),
+(22, 'Nuevo Pedido', 'Pedido 8TIJ1QRC por $4.52', 'pedido', '2025-06-17 10:07:47', 'no leida'),
+(23, 'Nuevo Pedido', 'Pedido 5GT39WK9 por $4.52', 'pedido', '2025-06-17 10:11:39', 'no leida'),
+(24, 'Nuevo Pedido', 'Pedido ZPYN9PXJ por $4.52', 'pedido', '2025-06-17 10:11:50', 'no leida'),
+(25, 'Nuevo Pedido', 'Pedido YT48URA8 por $4.52', 'pedido', '2025-06-17 10:14:25', 'no leida'),
+(26, 'Nuevo Pedido', 'Pedido 1LQVPXTN por $4.52', 'pedido', '2025-06-17 10:15:28', 'no leida');
 
 -- --------------------------------------------------------
 
@@ -365,7 +397,12 @@ INSERT INTO `pedidos` (`id_pedido`, `codigo_pedido`, `id_usuario`, `id_direccion
 (15, '9WWWEAQ9', 11, 15, '2025-06-15 17:46:10', 'entregado', 7.02, 'invitado', 'efectivo', 'ERICK2121', 'TIZNADO', '70830446', 'admin_1750009563808@mamamianpizza.com', NULL, NULL, 4.00, 2.50, 0.52, 1, 30, NULL, NULL, NULL),
 (16, 'G7AW9Q18', 12, 16, '2025-06-16 16:31:19', 'pendiente', 4.52, 'registrado', 'efectivo', 'Erick Mauricio Tiznado', NULL, '70830446', 'tiznadoerick3@gmail.com', NULL, NULL, 4.00, 0.00, 0.52, 1, 25, NULL, NULL, NULL),
 (17, '3L4LN329', 12, 17, '2025-06-16 16:31:19', 'pendiente', 4.52, 'registrado', 'efectivo', 'Erick Mauricio Tiznado', NULL, '70830446', 'tiznadoerick3@gmail.com', NULL, NULL, 4.00, 0.00, 0.52, 1, 25, NULL, NULL, NULL),
-(18, 'AE4ZC6RH', 4, 18, '2025-06-16 16:31:21', 'pendiente', 4.52, 'registrado', 'efectivo', 'milu', NULL, '70141812', 'nathy.zelaya55@gmail.com', NULL, NULL, 4.00, 0.00, 0.52, 1, 25, NULL, NULL, NULL);
+(18, 'AE4ZC6RH', 4, 18, '2025-06-16 16:31:21', 'pendiente', 4.52, 'registrado', 'efectivo', 'milu', NULL, '70141812', 'nathy.zelaya55@gmail.com', NULL, NULL, 4.00, 0.00, 0.52, 1, 25, NULL, NULL, NULL),
+(19, '8TIJ1QRC', 13, 19, '2025-06-17 10:07:47', 'pendiente', 4.52, 'invitado', 'efectivo', 'fgdgdfgdf', 'g43534534', '5464645646', NULL, NULL, NULL, 4.00, 0.00, 0.52, 1, 25, NULL, NULL, 3),
+(20, '5GT39WK9', 14, 20, '2025-06-17 10:11:39', 'pendiente', 4.52, 'invitado', 'efectivo', 'fgdgdfgdf', 'g43534534', '5464645646', NULL, NULL, NULL, 4.00, 0.00, 0.52, 1, 25, NULL, NULL, 3),
+(21, 'ZPYN9PXJ', 15, 21, '2025-06-17 10:11:50', 'pendiente', 4.52, 'invitado', 'efectivo', 'fgdgdfgdf', 'g43534534', '5464645646', NULL, NULL, NULL, 4.00, 0.00, 0.52, 1, 25, NULL, NULL, 3),
+(22, 'YT48URA8', 4, 22, '2025-06-17 10:14:24', 'pendiente', 4.52, 'registrado', 'efectivo', 'hfghfgh', NULL, '3534534535', 'nathy.zelaya55@gmail.com', NULL, NULL, 4.00, 0.00, 0.52, 1, 25, NULL, NULL, NULL),
+(23, '1LQVPXTN', 4, 23, '2025-06-17 10:15:28', 'pendiente', 4.52, 'registrado', 'efectivo', '435345345', NULL, '353453535', 'nathy.zelaya55@gmail.com', NULL, NULL, 4.00, 0.00, 0.52, 1, 25, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -517,7 +554,7 @@ INSERT INTO `usuarios` (`id_usuario`, `nombre`, `correo`, `contrasena`, `celular
 (1, 'ERICK', 'admin_1749692622800@mamamianpizza.com', '$2b$05$jC4KdqS8vHrlwmdjUf/uh.AhdZ1Xd7gn6yrmFsXR2.UScydB5bV/m', '70830446', NULL, NULL, NULL, NULL),
 (2, 'ERICK', 'admin_1749700105259@mamamianpizza.com', '$2b$05$7.bsGhXj3vV7P5fezUi8cuxn.W2NumaTVexJG3Vro8pNquGmcQmrC', '70830446', NULL, NULL, NULL, NULL),
 (3, 'nathaly milenas', 'nathy.zelaya5@gmail.com', '$2b$10$UkKD/yDKIIcaqN3Hl.K1KuBWENdiB.f4u9eDK7dnV9uxcwCWVxS/2', '70141812', '2007-06-03', 'F', '123456789', NULL),
-(4, 'milena zelaya', 'nathy.zelaya55@gmail.com', '$2b$10$0Wx.0HLRSnbl6amYtIy1R.MDh/55Hks0LoZBVgg4.rW8yRXYj2Gd6', '70141812', '1992-06-07', 'F', '123456789', 'https://api.mamamianpizza.com/uploads/profiles/profile-1750131911637-840529047.png'),
+(4, 'milena zelaya', 'nathy.zelaya55@gmail.com', '$2b$10$0Wx.0HLRSnbl6amYtIy1R.MDh/55Hks0LoZBVgg4.rW8yRXYj2Gd6', '70141812', '1992-06-07', 'F', '123456789', 'https://api.mamamianpizza.com/uploads/profiles/profile-1750157108851-682143803.jpg'),
 (5, 'ERICK', 'admin_1749752900416@mamamianpizza.com', '$2b$05$c6TBfGgTS/WLpH6gaAkWMe4vEoO6B9gIskAIXnuMCdEnjqe50EHtq', '70830446', NULL, NULL, NULL, NULL),
 (6, 'Tiznado', 'admin_1749859237052@mamamianpizza.com', '$2b$05$XEujTJ67Hef9AiJYy/sPFOWBi/WXVAg2B0CuvJtoewKJiK.LsRxly', '70830446', NULL, NULL, NULL, NULL),
 (7, 'ERICK', 'admin_1749929069946@mamamianpizza.com', '$2b$05$9DS.UcYB37aE1Wto87Et/.I/521jkEaSSz2MGDr54PVbpACqlpjfe', '70830446', NULL, NULL, NULL, NULL),
@@ -525,7 +562,10 @@ INSERT INTO `usuarios` (`id_usuario`, `nombre`, `correo`, `contrasena`, `celular
 (9, 'mielna', 'invitado_1749932257497@mamamianpizza.com', '$2b$05$NVoVLD7BInZofll48paKfOcN0/AzZfg1esm91F4GrQxGEGLqkoDnC', '70141812', NULL, NULL, NULL, NULL),
 (10, 'ERICK1213', 'admin_1750007765841@mamamianpizza.com', '$2b$05$eoy10StUMCZID.LIGtmMguzC4HUs/VcKsUhpg6b3.AgyYLnR2KRIu', '70830446', NULL, NULL, NULL, NULL),
 (11, 'ERICK2121', 'guest_70830446_1750009570414@temp.com', 'guest_user_no_password', '70830446', NULL, NULL, NULL, NULL),
-(12, 'Erick Mauricio ', 'tiznadoerick3@gmail.com', '$2b$12$qMs2ZEPWbETWlE/h7xhjZO7R8iFKfFlRab1eKrhaA4U4yfQqOMwZ2', '70830446', '2002-10-06', 'M', '063693309', 'https://api.mamamianpizza.com/uploads/profiles/profile-1750091033242-425369579.jpg');
+(12, 'Erick Mauricio ', 'tiznadoerick3@gmail.com', '$2b$12$qMs2ZEPWbETWlE/h7xhjZO7R8iFKfFlRab1eKrhaA4U4yfQqOMwZ2', '70830446', '2002-10-06', 'M', '063693309', 'https://api.mamamianpizza.com/uploads/profiles/profile-1750091033242-425369579.jpg'),
+(13, 'Invitado-fgdgdfgdf', 'invitado_5464645646_1750154867358@mamamianpizza.com', '$2b$05$x5TTU.QX2X8GUKr0JMHNre5cA/wHc0qAHZ75E.XdIzIkwji3l4tRW', '5464645646', NULL, NULL, NULL, NULL),
+(14, 'Invitado-fgdgdfgdf', 'invitado_5464645646_1750155099003@mamamianpizza.com', '$2b$05$CU/ndTps5/CdAUmZWAvGwuwtXrQVoHhCKR7TSF2CU5v/SVj6vqY0q', '5464645646', NULL, NULL, NULL, NULL),
+(15, 'Invitado-fgdgdfgdf', 'invitado_5464645646_1750155110010@mamamianpizza.com', '$2b$05$qTZKlCTWpHrFcl6vu55C6uvxpSFAkAXJLMHrV/aBHp4vCOZNkjQ6C', '5464645646', NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -548,7 +588,8 @@ CREATE TABLE `usuarios_invitados` (
 
 INSERT INTO `usuarios_invitados` (`id_usuario_invitado`, `nombre`, `apellido`, `celular`, `fecha_creacion`, `ultimo_pedido`) VALUES
 (1, 'ERICK2121', 'TIZNADO', '70830446', '2025-06-12 01:43:46', '2025-06-15 17:46:10'),
-(2, 'mielna', 'wedwefdwe', '70141812', '2025-06-14 20:16:02', '2025-06-14 20:17:37');
+(2, 'mielna', 'wedwefdwe', '70141812', '2025-06-14 20:16:02', '2025-06-14 20:17:37'),
+(3, 'fgdgdfgdf', 'g43534534', '5464645646', '2025-06-17 10:07:47', '2025-06-17 10:11:50');
 
 --
 -- Índices para tablas volcadas
@@ -716,7 +757,7 @@ ALTER TABLE `usuarios_invitados`
 -- AUTO_INCREMENT de la tabla `administradores`
 --
 ALTER TABLE `administradores`
-  MODIFY `id_admin` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id_admin` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `categorias`
@@ -734,19 +775,19 @@ ALTER TABLE `contenido_web`
 -- AUTO_INCREMENT de la tabla `detalle_pedidos`
 --
 ALTER TABLE `detalle_pedidos`
-  MODIFY `id_detalle` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
+  MODIFY `id_detalle` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=29;
 
 --
 -- AUTO_INCREMENT de la tabla `direcciones`
 --
 ALTER TABLE `direcciones`
-  MODIFY `id_direccion` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
+  MODIFY `id_direccion` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
 
 --
 -- AUTO_INCREMENT de la tabla `experiencia`
 --
 ALTER TABLE `experiencia`
-  MODIFY `id_experiencia` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id_experiencia` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `historial_contenido`
@@ -782,7 +823,7 @@ ALTER TABLE `movimientos_inventario`
 -- AUTO_INCREMENT de la tabla `notificaciones`
 --
 ALTER TABLE `notificaciones`
-  MODIFY `id_notificacion` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
+  MODIFY `id_notificacion` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
 
 --
 -- AUTO_INCREMENT de la tabla `password_reset`
@@ -794,7 +835,7 @@ ALTER TABLE `password_reset`
 -- AUTO_INCREMENT de la tabla `pedidos`
 --
 ALTER TABLE `pedidos`
-  MODIFY `id_pedido` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
+  MODIFY `id_pedido` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
 
 --
 -- AUTO_INCREMENT de la tabla `productos`
@@ -830,13 +871,13 @@ ALTER TABLE `tamanos`
 -- AUTO_INCREMENT de la tabla `usuarios`
 --
 ALTER TABLE `usuarios`
-  MODIFY `id_usuario` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id_usuario` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT de la tabla `usuarios_invitados`
 --
 ALTER TABLE `usuarios_invitados`
-  MODIFY `id_usuario_invitado` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_usuario_invitado` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- Restricciones para tablas volcadas
