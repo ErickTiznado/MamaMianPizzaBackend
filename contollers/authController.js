@@ -75,8 +75,7 @@ exports.requestPasswordReset = async (req, res) => {
         
         // Clean phone number for database lookup
         const cleanPhone = celular.replace(/\D/g, '');
-        
-        // Check if user exists with this phone number
+          // Check if user exists with this phone number
         pool.query(
             'SELECT id_usuario, nombre FROM usuarios WHERE celular = ? OR celular = ? OR celular = ?',
             [celular, cleanPhone, `+503${cleanPhone}`],
@@ -99,21 +98,22 @@ exports.requestPasswordReset = async (req, res) => {
                 const otp = generateOTP();
                 const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
                 
-                // Delete any existing OTP for this user
+                // Delete any existing password reset for this user
                 pool.query(
-                    'DELETE FROM otp_resets WHERE id_usuario = ?',
-                    [user.id_usuario],
+                    'DELETE FROM password_reset WHERE user_id = ? AND user_type = ?',
+                    [user.id_usuario, 'usuario'],
                     (deleteErr) => {
                         if (deleteErr) {
-                            console.error('Error al limpiar OTP existente:', deleteErr);
+                            console.error('Error al limpiar código existente:', deleteErr);
                         }
                         
-                        // Insert new OTP
+                        // Insert new password reset code
                         pool.query(
-                            'INSERT INTO otp_resets (id_usuario, otp, expires_at, created_at) VALUES (?, ?, ?, NOW())',
-                            [user.id_usuario, otp, expiresAt],
-                            async (insertErr) => {                                if (insertErr) {
-                                    console.error('Error al guardar OTP:', insertErr);
+                            'INSERT INTO password_reset (user_id, user_type, reset_code, expiracion, used) VALUES (?, ?, ?, ?, ?)',
+                            [user.id_usuario, 'usuario', otp, expiresAt, 0],
+                            async (insertErr) => {
+                                if (insertErr) {
+                                    console.error('Error al guardar código de restablecimiento:', insertErr);
                                     return res.status(500).json({
                                         message: 'Error al generar código de verificación',
                                         error: insertErr.message
@@ -182,18 +182,19 @@ exports.verifyResetOTP = async (req, res) => {
         
         // Clean phone number
         const cleanPhone = celular.replace(/\D/g, '');
-        
-        // Find user and verify OTP
+          // Find user and verify reset code
         pool.query(`
-            SELECT u.id_usuario, u.nombre, o.otp, o.expires_at
+            SELECT u.id_usuario, u.nombre, pr.reset_code, pr.expiracion
             FROM usuarios u
-            JOIN otp_resets o ON u.id_usuario = o.id_usuario
+            JOIN password_reset pr ON u.id_usuario = pr.user_id
             WHERE (u.celular = ? OR u.celular = ? OR u.celular = ?)
-            AND o.otp = ?
-            AND o.expires_at > NOW()
+            AND pr.reset_code = ?
+            AND pr.expiracion > NOW()
+            AND pr.used = 0
+            AND pr.user_type = 'usuario'
         `, [celular, cleanPhone, `+503${cleanPhone}`, otp], (err, results) => {
             if (err) {
-                console.error('Error al verificar OTP:', err);
+                console.error('Error al verificar código de restablecimiento:', err);
                 return res.status(500).json({
                     message: 'Error interno del servidor',
                     error: err.message
@@ -202,21 +203,22 @@ exports.verifyResetOTP = async (req, res) => {
             
             if (results.length === 0) {
                 return res.status(400).json({
-                    message: 'Código OTP inválido o expirado'
+                    message: 'Código inválido o expirado'
                 });
             }
-              const user = results[0];
+            
+            const user = results[0];
             
             // Generate temporary token for password reset (15 minutes)
             const resetToken = generateSimpleToken(user.id_usuario);
             
-            // Mark OTP as used (optional: you could delete it or add a 'used' flag)
+            // Mark reset code as used
             pool.query(
-                'UPDATE otp_resets SET used_at = NOW() WHERE id_usuario = ? AND otp = ?',
-                [user.id_usuario, otp],
+                'UPDATE password_reset SET used = 1 WHERE user_id = ? AND reset_code = ? AND user_type = ?',
+                [user.id_usuario, otp, 'usuario'],
                 (updateErr) => {
                     if (updateErr) {
-                        console.error('Error al marcar OTP como usado:', updateErr);
+                        console.error('Error al marcar código como usado:', updateErr);
                     }
                 }
             );
@@ -287,14 +289,13 @@ exports.resetPassword = async (req, res) => {
                         message: 'Usuario no encontrado'
                     });
                 }
-                
-                // Delete/invalidate all OTPs for this user
+                  // Delete/invalidate all password reset codes for this user
                 pool.query(
-                    'DELETE FROM otp_resets WHERE id_usuario = ?',
-                    [userId],
+                    'DELETE FROM password_reset WHERE user_id = ? AND user_type = ?',
+                    [userId, 'usuario'],
                     (deleteErr) => {
                         if (deleteErr) {
-                            console.error('Error al limpiar OTPs:', deleteErr);
+                            console.error('Error al limpiar códigos de restablecimiento:', deleteErr);
                         }
                     }
                 );
