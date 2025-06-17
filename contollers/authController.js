@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
+const { createTransporter, validateEmailConfig } = require('../config/emailConfig');
+const { templatePasswordReset, templatePasswordChanged } = require('../config/emailTemplates');
 
 // Simple token generation (temporary solution without JWT)
 const generateSimpleToken = (userId) => {
@@ -31,54 +33,131 @@ const generateOTP = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-// Helper function to validate phone number format
-const validatePhoneNumber = (celular) => {
-    // Remove any non-digit characters
-    const cleanPhone = celular.replace(/\D/g, '');
-    // Check if it's 8 digits (El Salvador format) or 10+ digits (international)
-    return cleanPhone.length >= 8 && cleanPhone.length <= 15;
+// Helper function to validate email format
+const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
 };
 
-// Helper function to format phone number for SMS
-const formatPhoneForSMS = (celular) => {
-    const cleanPhone = celular.replace(/\D/g, '');
-    // If it's 8 digits, assume it's El Salvador and add country code
-    if (cleanPhone.length === 8) {
-        return `+503${cleanPhone}`;
+// Helper function to send email
+const enviarCorreo = async (email, nombre, otp, tipoCorreo = 'password_reset') => {
+    try {
+        // Validar configuración
+        validateEmailConfig();
+        
+        // Crear transporter
+        const transporter = createTransporter();
+        
+        // Configurar opciones del correo según el tipo
+        let mailOptions;
+        
+        if (tipoCorreo === 'password_reset') {
+            mailOptions = {
+                from: {
+                    name: process.env.EMAIL_FROM_NAME || 'Mama Mian Pizza',
+                    address: process.env.EMAIL_FROM_ADDRESS || process.env.EMAIL_USER
+                },
+                to: email,
+                subject: '🔐 Código de Verificación - Mama Mian Pizza',
+                html: templatePasswordReset(nombre, otp, 10),
+                // Versión texto plano como fallback
+                text: `
+Hola ${nombre},
+
+Tu código de verificación para restablecer tu contraseña es: ${otp}
+
+Este código es válido por 10 minutos.
+No compartas este código con nadie.
+
+Si no solicitaste este código, ignora este correo.
+
+Saludos,
+Equipo de Mama Mian Pizza
+                `.trim()
+            };
+        } else if (tipoCorreo === 'password_changed') {
+            mailOptions = {
+                from: {
+                    name: process.env.EMAIL_FROM_NAME || 'Mama Mian Pizza',
+                    address: process.env.EMAIL_FROM_ADDRESS || process.env.EMAIL_USER
+                },
+                to: email,
+                subject: '✅ Contraseña Actualizada - Mama Mian Pizza',
+                html: templatePasswordChanged(nombre),
+                text: `
+Hola ${nombre},
+
+Tu contraseña ha sido cambiada exitosamente.
+
+Si no realizaste este cambio, contacta inmediatamente a nuestro equipo de soporte.
+
+Saludos,
+Equipo de Mama Mian Pizza
+                `.trim()
+            };
+        }
+        
+        // Enviar correo
+        const info = await transporter.sendMail(mailOptions);
+        
+        // Log de éxito con información detallada
+        console.log(`✅ Correo enviado exitosamente:`);
+        console.log(`   📧 Destinatario: ${email}`);
+        console.log(`   📝 Tipo: ${tipoCorreo}`);
+        console.log(`   🆔 Message ID: ${info.messageId}`);
+        console.log(`   📊 Response: ${info.response}`);
+        
+        return {
+            success: true,
+            messageId: info.messageId,
+            response: info.response
+        };
+        
+    } catch (error) {
+        console.error('❌ Error enviando correo:');
+        console.error(`   📧 Destinatario: ${email}`);
+        console.error(`   📝 Tipo: ${tipoCorreo}`);
+        console.error(`   ⚠️  Error: ${error.message}`);
+        
+        // Log detallado para debugging
+        if (error.code) {
+            console.error(`   🔧 Código de error: ${error.code}`);
+        }
+        if (error.command) {
+            console.error(`   📡 Comando: ${error.command}`);
+        }
+        
+        return {
+            success: false,
+            error: error.message,
+            code: error.code
+        };
     }
-    // If it already has country code, return as is
-    if (cleanPhone.startsWith('503') && cleanPhone.length === 11) {
-        return `+${cleanPhone}`;
-    }
-    // Otherwise, assume it's already properly formatted
-    return cleanPhone.startsWith('+') ? celular : `+${cleanPhone}`;
 };
 
 // Endpoint POST /auth/request-reset
 exports.requestPasswordReset = async (req, res) => {
     try {
-        const { celular } = req.body;
+        const { correo } = req.body;
         
         // Validate input
-        if (!celular) {
+        if (!correo) {
             return res.status(400).json({
-                message: 'Número de celular es requerido'
+                message: 'Correo electrónico es requerido'
             });
         }
         
-        // Validate phone number format
-        if (!validatePhoneNumber(celular)) {
+        // Validate email format
+        if (!validateEmail(correo)) {
             return res.status(400).json({
-                message: 'Formato de número de celular inválido'
+                message: 'Formato de correo electrónico inválido'
             });
         }
         
-        // Clean phone number for database lookup
-        const cleanPhone = celular.replace(/\D/g, '');
-          // Check if user exists with this phone number
+        // Check if user exists with this email
         pool.query(
-            'SELECT id_usuario, nombre FROM usuarios WHERE celular = ? OR celular = ? OR celular = ?',
-            [celular, cleanPhone, `+503${cleanPhone}`],
+            'SELECT id_usuario, nombre, correo FROM usuarios WHERE correo = ?',
+            [correo],
             async (err, userResults) => {
                 if (err) {
                     console.error('Error al buscar usuario:', err);
@@ -90,7 +169,7 @@ exports.requestPasswordReset = async (req, res) => {
                 
                 if (userResults.length === 0) {
                     return res.status(404).json({
-                        message: 'No se encontró un usuario con este número de celular'
+                        message: 'No se encontró un usuario con este correo electrónico'
                     });
                 }
                 
@@ -118,33 +197,44 @@ exports.requestPasswordReset = async (req, res) => {
                                         message: 'Error al generar código de verificación',
                                         error: insertErr.message
                                     });
-                                }
-                                
-                                // Generate OTP response
+                                }                                // Enviar código por correo electrónico
                                 try {
-                                    const phoneForSMS = formatPhoneForSMS(celular);
-                                    const message = `Hola ${user.nombre}, tu código de verificación para restablecer tu contraseña es: ${otp}. Válido por 10 minutos.`;
+                                    console.log(`📧 Enviando código de verificación a: ${user.correo}`);
+                                    const resultadoCorreo = await enviarCorreo(user.correo, user.nombre, otp, 'password_reset');
                                     
-                                    // For now, just log the OTP (SMS functionality can be added later)
-                                    console.log(`[CÓDIGO OTP] Para ${phoneForSMS}: ${otp}`);
-                                    console.log(`[MENSAJE] ${message}`);
+                                    if (resultadoCorreo.success) {
+                                        res.status(200).json({
+                                            success: true,
+                                            message: 'Código de verificación enviado a tu correo electrónico',
+                                            correo: user.correo.replace(/(.{2}).*@/, '$1***@'), // Mask email
+                                            validez_minutos: 10,
+                                            timestamp: new Date().toISOString()
+                                        });
+                                    } else {
+                                        // Si falla el envío del correo, eliminar el código de la BD
+                                        pool.query('DELETE FROM password_reset WHERE user_id = ? AND user_type = ?', 
+                                            [user.id_usuario, 'usuario']);
+                                        
+                                        return res.status(500).json({
+                                            success: false,
+                                            message: 'Error al enviar el correo de verificación',
+                                            error: 'Servicio de correo no disponible',
+                                            details: resultadoCorreo.error
+                                        });
+                                    }
                                     
-                                    res.status(200).json({
-                                        message: 'Código de verificación generado (revisar logs del servidor)',
-                                        celular: celular.replace(/\d(?=\d{4})/g, '*'), // Mask phone number
-                                        validez_minutos: 10,
-                                        otp_para_pruebas: otp // Solo para desarrollo - quitar en producción
-                                    });
+                                } catch (emailError) {
+                                    console.error('Error crítico al enviar correo:', emailError);
                                     
-                                } catch (smsError) {
-                                    console.error('Error al generar código:', smsError);
-                                    
-                                    // Delete the OTP if failed
-                                    pool.query('DELETE FROM otp_resets WHERE id_usuario = ?', [user.id_usuario]);
+                                    // Delete the reset code if email failed
+                                    pool.query('DELETE FROM password_reset WHERE user_id = ? AND user_type = ?', 
+                                        [user.id_usuario, 'usuario']);
                                     
                                     return res.status(500).json({
-                                        message: 'Error al generar código de verificación',
-                                        error: 'Error interno del servidor'
+                                        success: false,
+                                        message: 'Error al enviar código de verificación',
+                                        error: 'Error interno del servidor',
+                                        details: emailError.message
                                     });
                                 }
                             });
@@ -164,12 +254,19 @@ exports.requestPasswordReset = async (req, res) => {
 // Endpoint POST /auth/verify-reset
 exports.verifyResetOTP = async (req, res) => {
     try {
-        const { celular, otp } = req.body;
+        const { correo, otp } = req.body;
         
         // Validate input
-        if (!celular || !otp) {
+        if (!correo || !otp) {
             return res.status(400).json({
-                message: 'Número de celular y código OTP son requeridos'
+                message: 'Correo electrónico y código OTP son requeridos'
+            });
+        }
+        
+        // Validate email format
+        if (!validateEmail(correo)) {
+            return res.status(400).json({
+                message: 'Formato de correo electrónico inválido'
             });
         }
         
@@ -179,20 +276,17 @@ exports.verifyResetOTP = async (req, res) => {
                 message: 'El código OTP debe tener 6 dígitos'
             });
         }
-        
-        // Clean phone number
-        const cleanPhone = celular.replace(/\D/g, '');
           // Find user and verify reset code
         pool.query(`
             SELECT u.id_usuario, u.nombre, pr.reset_code, pr.expiracion
             FROM usuarios u
             JOIN password_reset pr ON u.id_usuario = pr.user_id
-            WHERE (u.celular = ? OR u.celular = ? OR u.celular = ?)
+            WHERE u.correo = ?
             AND pr.reset_code = ?
             AND pr.expiracion > NOW()
             AND pr.used = 0
             AND pr.user_type = 'usuario'
-        `, [celular, cleanPhone, `+503${cleanPhone}`, otp], (err, results) => {
+        `, [correo, otp], (err, results) => {
             if (err) {
                 console.error('Error al verificar código de restablecimiento:', err);
                 return res.status(500).json({
@@ -299,20 +393,46 @@ exports.resetPassword = async (req, res) => {
                         }
                     }
                 );
-                
-                // Get user info for response
+                  // Get user info for response and send confirmation email
                 pool.query(
                     'SELECT nombre, correo FROM usuarios WHERE id_usuario = ?',
                     [userId],
-                    (selectErr, userResults) => {
+                    async (selectErr, userResults) => {
+                        if (selectErr) {
+                            console.error('Error al obtener datos del usuario:', selectErr);
+                        }
+                        
                         const userName = userResults && userResults.length > 0 
                             ? userResults[0].nombre 
                             : 'Usuario';
                         
+                        const userEmail = userResults && userResults.length > 0 
+                            ? userResults[0].correo 
+                            : null;
+                        
+                        // Enviar correo de confirmación (opcional, no debe bloquear la respuesta)
+                        if (userEmail) {
+                            try {
+                                console.log(`📧 Enviando confirmación de cambio de contraseña a: ${userEmail}`);
+                                const resultadoConfirmacion = await enviarCorreo(userEmail, userName, null, 'password_changed');
+                                
+                                if (resultadoConfirmacion.success) {
+                                    console.log(`✅ Correo de confirmación enviado exitosamente`);
+                                } else {
+                                    console.error(`❌ Error enviando confirmación: ${resultadoConfirmacion.error}`);
+                                }
+                            } catch (confirmationError) {
+                                console.error('Error al enviar correo de confirmación:', confirmationError.message);
+                                // No afecta la respuesta principal
+                            }
+                        }
+                        
                         res.status(200).json({
+                            success: true,
                             message: 'Contraseña restablecida exitosamente',
                             usuario: userName,
-                            timestamp: new Date().toISOString()
+                            timestamp: new Date().toISOString(),
+                            correo_confirmacion: userEmail ? 'enviado' : 'no_disponible'
                         });
                     }
                 );
