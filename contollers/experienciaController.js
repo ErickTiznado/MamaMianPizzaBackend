@@ -84,13 +84,11 @@ exports.createExperiencia = async (req, res) => {
             `, [titulo, valoracion, id_usuario, contenido]);
             
             console.log('✅ Experiencia insertada con ID:', result.insertId);
-            
-            // Get the created experience with user info
+              // Get the created experience with user info
             const [newExperience] = await connection.query(`
                 SELECT 
                     e.*,
-                    u.nombre as nombre_usuario,
-                    u.foto_perfil as foto_perfil_usuario
+                    u.nombre as nombre_usuario
                 FROM experiencia e
                 JOIN usuarios u ON e.id_usuario = u.id_usuario
                 WHERE e.id_experiencia = ?
@@ -106,11 +104,10 @@ exports.createExperiencia = async (req, res) => {
                     valoracion: newExperience[0].valoracion,
                     contenido: newExperience[0].contenido,
                     aprobado: newExperience[0].aprobado,
-                    estado: newExperience[0].aprobado === 1 ? 'aprobada' : 'pendiente',
-                    usuario: {
+                    estado: newExperience[0].aprobado === 1 ? 'aprobada' : 'pendiente',                    usuario: {
                         id: newExperience[0].id_usuario,
                         nombre: newExperience[0].nombre_usuario,
-                        foto_perfil: newExperience[0].foto_perfil_usuario
+                        ruta_foto: newExperience[0].ruta_foto
                     }
                 }
             });
