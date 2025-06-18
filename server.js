@@ -7,7 +7,6 @@ const pool = require('./config/db');
 
 // Import routes
 const userRoutes = require('./routes/userRoutes');
-const testRoutes = require('./routes/testRoutes');
 const contentRoutes = require('./routes/contentRoutes');
 const inventoriRoutes = require('./routes/inventoriRoutes');
 const orderRoutes = require('./routes/orderRoutes');
