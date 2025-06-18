@@ -166,17 +166,16 @@ exports.loginAdmin = (req, res) =>{
     const {correo, contrasena} = req.body;
     if(!correo || !contrasena){
         return res.status(400).json({message: 'Faltan datos requeridos'});
-    }
-
-    pool.query('SELECT * FROM administradores WHERE correo = ?', [correo], (err, results) =>{
+    }    pool.query('SELECT * FROM administradores WHERE correo = ?', [correo], (err, results) =>{
         if(err){
             console.error('Error al iniciar sesion', err);
             return res.status(500).json({error: 'Error al iniciar sesion'})
         }
+        
         if(results.length === 0){
             return res.status(401).json({message: 'Credenciales invalidas'});
         }
-
+        
         const admin = results[0];
         console.log('Admin:', admin);
         bcrypt.compare(contrasena, admin.contrasena, (err, isMatch) =>{
@@ -186,7 +185,13 @@ exports.loginAdmin = (req, res) =>{
             }
 
             if(isMatch){
-                res.status(200).json({ success:true ,message: 'Inicio de sesion exitoso'});
+                res.status(200).json({ 
+                    success: true,
+                    message: 'Inicio de sesion exitoso',
+                    id_admin: admin.id_admin,
+                    nombre: admin.nombre,
+                    rol: admin.rol
+                });
 
             }else {
                 return res.status(401).json({message: 'Credenciales invalidas'});
@@ -200,17 +205,16 @@ exports.loginClient = (req, res) => {
     const {correo, contrasena} = req.body;
     if(!correo || !contrasena){
         return res.status(400).json({message: 'Faltan datos requeridos'})
-    }
-
-    pool.query('SELECT * FROM usuarios WHERE correo = ?', [correo], (err, results) => {
+    }    pool.query('SELECT * FROM usuarios WHERE correo = ?', [correo], (err, results) => {
         if(err){
             console.error('Error al iniciar sesion', err);
             return res.status(500).json({error: 'Error al iniciar sesion'})
         }
+        
         if(results.length === 0){
             return res.status(401).json({message: 'Credenciales invalidas'})
         }
-
+        
         const user = results[0];
         bcrypt.compare(contrasena, user.contrasena, (err, isMatch) => {
             if(err){
@@ -218,7 +222,12 @@ exports.loginClient = (req, res) => {
                 return res.status(500).json({message: 'Error en el servidor'});
             }
             if(isMatch){
-                res.status(200).json({ success:true, message: 'Inicio de sesion exitoso'});
+                res.status(200).json({ 
+                    success: true, 
+                    message: 'Inicio de sesion exitoso',
+                    id_usuario: user.id_usuario,
+                    nombre: user.nombre
+                });
             }
             else{
                 return res.status(401).json({message: 'Credenciales invalidas'})
