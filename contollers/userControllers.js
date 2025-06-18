@@ -163,10 +163,11 @@ exports.createAdmin = async (req, res) => {
 
 
 exports.loginAdmin = (req, res) =>{
-    const {correo, contrasena} = req.body;
-    if(!correo || !contrasena){
+    const {correo, contrasena} = req.body;    if(!correo || !contrasena){
         return res.status(400).json({message: 'Faltan datos requeridos'});
-    }    pool.query('SELECT * FROM administradores WHERE correo = ?', [correo], (err, results) =>{
+    }
+
+    pool.query('SELECT * FROM administradores WHERE correo = ?', [correo], (err, results) =>{
         if(err){
             console.error('Error al iniciar sesion', err);
             return res.status(500).json({error: 'Error al iniciar sesion'})
@@ -182,9 +183,30 @@ exports.loginAdmin = (req, res) =>{
             if(err){
                 console.error('Error al comparar contraseñas', err);
                 return res.status(500).json({message: 'Error en el servidor'});
-            }
+            }            if(isMatch){
+                // Update ultimo_acceso for the admin
+                pool.query(
+                    'UPDATE administradores SET ultimo_acceso = CURRENT_TIMESTAMP WHERE id_admin = ?',
+                    [admin.id_admin],
+                    (updateErr) => {
+                        if (updateErr) {
+                            console.error('Error al actualizar ultimo_acceso del admin:', updateErr);
+                        }
+                    }
+                );
 
-            if(isMatch){
+                // Log successful admin login
+                const descripcionLog = `Inicio de sesión exitoso del administrador: ${admin.nombre} (${admin.correo}) - Rol: ${admin.rol}`;
+                pool.query(
+                    'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+                    [admin.id_admin, 'LOGIN', 'administradores', descripcionLog],
+                    (logErr) => {
+                        if (logErr) {
+                            console.error('Error al registrar login en logs:', logErr);
+                        }
+                    }
+                );
+
                 res.status(200).json({ 
                     success: true,
                     message: 'Inicio de sesion exitoso',
@@ -194,6 +216,18 @@ exports.loginAdmin = (req, res) =>{
                 });
 
             }else {
+                // Log failed admin login attempt
+                const descripcionLogFail = `Intento de inicio de sesión fallido para administrador con correo: ${correo}`;
+                pool.query(
+                    'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+                    [null, 'LOGIN_FAILED', 'administradores', descripcionLogFail],
+                    (logErr) => {
+                        if (logErr) {
+                            console.error('Error al registrar login fallido en logs:', logErr);
+                        }
+                    }
+                );
+
                 return res.status(401).json({message: 'Credenciales invalidas'});
             }
         }
@@ -202,10 +236,11 @@ exports.loginAdmin = (req, res) =>{
 };
 
 exports.loginClient = (req, res) => {
-    const {correo, contrasena} = req.body;
-    if(!correo || !contrasena){
+    const {correo, contrasena} = req.body;    if(!correo || !contrasena){
         return res.status(400).json({message: 'Faltan datos requeridos'})
-    }    pool.query('SELECT * FROM usuarios WHERE correo = ?', [correo], (err, results) => {
+    }
+
+    pool.query('SELECT * FROM usuarios WHERE correo = ?', [correo], (err, results) => {
         if(err){
             console.error('Error al iniciar sesion', err);
             return res.status(500).json({error: 'Error al iniciar sesion'})
@@ -220,8 +255,30 @@ exports.loginClient = (req, res) => {
             if(err){
                 console.log('Error al comparar contraseñas', err);
                 return res.status(500).json({message: 'Error en el servidor'});
-            }
-            if(isMatch){
+            }            if(isMatch){
+                // Update ultimo_acceso for the user
+                pool.query(
+                    'UPDATE usuarios SET ultimo_acceso = CURRENT_TIMESTAMP WHERE id_usuario = ?',
+                    [user.id_usuario],
+                    (updateErr) => {
+                        if (updateErr) {
+                            console.error('Error al actualizar ultimo_acceso del usuario:', updateErr);
+                        }
+                    }
+                );
+
+                // Log successful user login
+                const descripcionLog = `Inicio de sesión exitoso del usuario: ${user.nombre} (${user.correo})`;
+                pool.query(
+                    'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+                    [user.id_usuario, 'LOGIN', 'usuarios', descripcionLog],
+                    (logErr) => {
+                        if (logErr) {
+                            console.error('Error al registrar login en logs:', logErr);
+                        }
+                    }
+                );
+
                 res.status(200).json({ 
                     success: true, 
                     message: 'Inicio de sesion exitoso',
@@ -230,6 +287,18 @@ exports.loginClient = (req, res) => {
                 });
             }
             else{
+                // Log failed user login attempt
+                const descripcionLogFail = `Intento de inicio de sesión fallido para usuario con correo: ${correo}`;
+                pool.query(
+                    'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+                    [null, 'LOGIN_FAILED', 'usuarios', descripcionLogFail],
+                    (logErr) => {
+                        if (logErr) {
+                            console.error('Error al registrar login fallido en logs:', logErr);
+                        }
+                    }
+                );
+
                 return res.status(401).json({message: 'Credenciales invalidas'})
             }
         })
