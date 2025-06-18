@@ -6,8 +6,8 @@ async function debugPasswordIssue() {
     console.log('🔍 DIAGNÓSTICO DE CONTRASEÑA - DEBUG\n');
     
     // Datos de prueba - CAMBIA ESTOS VALORES
-    const testUserId = 4; // Cambia por tu ID de usuario
-    const testPassword = 'miPassword123'; // Cambia por la contraseña que crees que es correcta
+    const testUserId = 3; // Cambia por tu ID de usuario
+    const testPassword = 'Losiento321'; // Cambia por la contraseña que crees que es correcta
     
     try {
         // 1. Obtener datos del usuario
