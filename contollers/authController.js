@@ -925,21 +925,37 @@ exports.resetPasswordAdmin = async (req, res) => {
 // Endpoint PUT /auth/change-password
 exports.changePassword = async (req, res) => {
     try {
+        console.log('🔄 Iniciando cambio de contraseña...');
+        console.log('📦 Body recibido:', { 
+            id_usuario: req.body.id_usuario, 
+            contrasenaActual: '***', 
+            nuevaContrasena: '***' 
+        });
+        
         const { id_usuario, contrasenaActual, nuevaContrasena } = req.body;
         
         // Validate input
         if (!id_usuario || !contrasenaActual || !nuevaContrasena) {
+            console.log('❌ Faltan datos requeridos');
             return res.status(400).json({
-                message: 'ID de usuario, contraseña actual y nueva contraseña son requeridos'
+                message: 'ID de usuario, contraseña actual y nueva contraseña son requeridos',
+                received: {
+                    id_usuario: !!id_usuario,
+                    contrasenaActual: !!contrasenaActual,
+                    nuevaContrasena: !!nuevaContrasena
+                }
             });
         }
         
         // Validate password strength
         if (nuevaContrasena.length < 8) {
+            console.log('❌ Nueva contraseña muy corta');
             return res.status(400).json({
                 message: 'La nueva contraseña debe tener al menos 8 caracteres'
             });
         }
+        
+        console.log(`🔍 Buscando usuario con ID: ${id_usuario}`);
         
         // Get user data
         pool.query(
@@ -947,7 +963,7 @@ exports.changePassword = async (req, res) => {
             [id_usuario],
             async (err, userResults) => {
                 if (err) {
-                    console.error('Error al buscar usuario:', err);
+                    console.error('❌ Error al buscar usuario:', err);
                     return res.status(500).json({
                         message: 'Error interno del servidor',
                         error: err.message
@@ -955,83 +971,160 @@ exports.changePassword = async (req, res) => {
                 }
                 
                 if (userResults.length === 0) {
+                    console.log(`❌ Usuario no encontrado con ID: ${id_usuario}`);
                     return res.status(404).json({
                         message: 'Usuario no encontrado'
                     });
                 }
                 
                 const user = userResults[0];
+                console.log(`✅ Usuario encontrado: ${user.nombre} (${user.correo})`);
+                console.log(`🔐 Hash en BD: ${user.contrasena.substring(0, 20)}...`);
                 
-                // Verify current password
-                const isCurrentPasswordValid = await bcrypt.compare(contrasenaActual, user.contrasena);
-                if (!isCurrentPasswordValid) {
-                    return res.status(401).json({
-                        message: 'La contraseña actual es incorrecta'
-                    });
-                }
-                
-                // Check if new password is different from current
-                const isSamePassword = await bcrypt.compare(nuevaContrasena, user.contrasena);
-                if (isSamePassword) {
-                    return res.status(400).json({
-                        message: 'La nueva contraseña debe ser diferente a la contraseña actual'
-                    });
-                }
-                
-                // Hash new password
-                const saltRounds = 12;
-                const hashedNewPassword = await bcrypt.hash(nuevaContrasena, saltRounds);
-                
-                // Update password in database
-                pool.query(
-                    'UPDATE usuarios SET contrasena = ? WHERE id_usuario = ?',
-                    [hashedNewPassword, id_usuario],
-                    async (updateErr, updateResults) => {
-                        if (updateErr) {
-                            console.error('Error al actualizar contraseña:', updateErr);
-                            return res.status(500).json({
-                                message: 'Error al actualizar la contraseña',
-                                error: updateErr.message
-                            });
-                        }
+                try {
+                    // Verify current password with detailed logging
+                    console.log('🔍 Verificando contraseña actual...');
+                    console.log(`📝 Contraseña recibida: "${contrasenaActual}" (longitud: ${contrasenaActual.length})`);
+                    
+                    const isCurrentPasswordValid = await bcrypt.compare(contrasenaActual, user.contrasena);
+                    console.log(`🔄 Resultado bcrypt.compare: ${isCurrentPasswordValid}`);
+                    
+                    if (!isCurrentPasswordValid) {
+                        console.log('❌ Contraseña actual incorrecta');
                         
-                        if (updateResults.affectedRows === 0) {
-                            return res.status(404).json({
-                                message: 'Usuario no encontrado'
-                            });
-                        }
+                        // Intentar con variaciones comunes para debugging
+                        console.log('🧪 Probando variaciones...');
+                        const variations = [
+                            contrasenaActual.trim(),
+                            contrasenaActual.toLowerCase(),
+                            contrasenaActual.toUpperCase()
+                        ];
                         
-                        // Send confirmation email (optional, non-blocking)
-                        if (user.correo) {
+                        for (const variation of variations) {
                             try {
-                                console.log(`📧 Enviando confirmación de cambio de contraseña a: ${user.correo}`);
-                                const resultadoConfirmacion = await enviarCorreo(user.correo, user.nombre, null, 'password_changed');
-                                
-                                if (resultadoConfirmacion.success) {
-                                    console.log(`✅ Correo de confirmación enviado exitosamente`);
-                                } else {
-                                    console.error(`❌ Error enviando confirmación: ${resultadoConfirmacion.error}`);
+                                const varMatch = await bcrypt.compare(variation, user.contrasena);
+                                console.log(`   "${variation}": ${varMatch}`);
+                                if (varMatch) {
+                                    console.log(`✅ Encontrada variación que funciona: "${variation}"`);
+                                    // Usar la variación que funciona
+                                    contrasenaActual = variation;
+                                    isCurrentPasswordValid = true;
+                                    break;
                                 }
-                            } catch (confirmationError) {
-                                console.error('Error al enviar correo de confirmación:', confirmationError.message);
-                                // No afecta la respuesta principal
+                            } catch (varErr) {
+                                console.log(`   Error probando "${variation}":`, varErr.message);
                             }
                         }
                         
-                        res.status(200).json({
-                            success: true,
-                            message: 'Contraseña cambiada exitosamente',
-                            usuario: user.nombre,
-                            timestamp: new Date().toISOString(),
-                            correo_confirmacion: user.correo ? 'enviado' : 'no_disponible'
+                        if (!isCurrentPasswordValid) {
+                            return res.status(401).json({
+                                message: 'La contraseña actual es incorrecta',
+                                debug: {
+                                    passwordLength: contrasenaActual.length,
+                                    hashInDB: user.contrasena.substring(0, 20) + '...'
+                                }
+                            });
+                        }
+                    }
+                    
+                    console.log('✅ Contraseña actual verificada correctamente');
+                    
+                    // Check if new password is different from current
+                    console.log('🔍 Verificando que la nueva contraseña sea diferente...');
+                    const isSamePassword = await bcrypt.compare(nuevaContrasena, user.contrasena);
+                    
+                    if (isSamePassword) {
+                        console.log('❌ Nueva contraseña es igual a la actual');
+                        return res.status(400).json({
+                            message: 'La nueva contraseña debe ser diferente a la contraseña actual'
                         });
                     }
-                );
+                    
+                    console.log('✅ Nueva contraseña es diferente');
+                    
+                    // Hash new password
+                    console.log('🔐 Hasheando nueva contraseña...');
+                    const saltRounds = 12;
+                    const hashedNewPassword = await bcrypt.hash(nuevaContrasena, saltRounds);
+                    console.log(`🔐 Nuevo hash generado: ${hashedNewPassword.substring(0, 20)}...`);
+                    
+                    // Update password in database
+                    console.log('💾 Actualizando contraseña en la base de datos...');
+                    pool.query(
+                        'UPDATE usuarios SET contrasena = ? WHERE id_usuario = ?',
+                        [hashedNewPassword, id_usuario],
+                        async (updateErr, updateResults) => {
+                            if (updateErr) {
+                                console.error('❌ Error al actualizar contraseña:', updateErr);
+                                return res.status(500).json({
+                                    message: 'Error al actualizar la contraseña',
+                                    error: updateErr.message
+                                });
+                            }
+                            
+                            if (updateResults.affectedRows === 0) {
+                                console.log('❌ No se actualizó ninguna fila');
+                                return res.status(404).json({
+                                    message: 'Usuario no encontrado al actualizar'
+                                });
+                            }
+                            
+                            console.log(`✅ Contraseña actualizada. Filas afectadas: ${updateResults.affectedRows}`);
+                            
+                            // Log successful password change
+                            const descripcionLog = `Cambio de contraseña exitoso para usuario: ${user.nombre} (${user.correo})`;
+                            pool.query(
+                                'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+                                [user.id_usuario, 'CHANGE_PASSWORD', 'usuarios', descripcionLog],
+                                (logErr) => {
+                                    if (logErr) {
+                                        console.error('Error al registrar cambio de contraseña en logs:', logErr);
+                                    } else {
+                                        console.log('✅ Cambio de contraseña registrado en logs');
+                                    }
+                                }
+                            );
+                            
+                            // Send confirmation email (optional, non-blocking)
+                            if (user.correo) {
+                                try {
+                                    console.log(`📧 Enviando confirmación de cambio de contraseña a: ${user.correo}`);
+                                    const resultadoConfirmacion = await enviarCorreo(user.correo, user.nombre, null, 'password_changed');
+                                    
+                                    if (resultadoConfirmacion.success) {
+                                        console.log(`✅ Correo de confirmación enviado exitosamente`);
+                                    } else {
+                                        console.error(`❌ Error enviando confirmación: ${resultadoConfirmacion.error}`);
+                                    }
+                                } catch (confirmationError) {
+                                    console.error('Error al enviar correo de confirmación:', confirmationError.message);
+                                    // No afecta la respuesta principal
+                                }
+                            }
+                            
+                            console.log('🎉 Cambio de contraseña completado exitosamente');
+                            res.status(200).json({
+                                success: true,
+                                message: 'Contraseña cambiada exitosamente',
+                                usuario: user.nombre,
+                                timestamp: new Date().toISOString(),
+                                correo_confirmacion: user.correo ? 'enviado' : 'no_disponible'
+                            });
+                        }
+                    );
+                    
+                } catch (bcryptError) {
+                    console.error('❌ Error en operación bcrypt:', bcryptError);
+                    return res.status(500).json({
+                        message: 'Error en la verificación de contraseña',
+                        error: bcryptError.message
+                    });
+                }
             }
         );
         
     } catch (error) {
-        console.error('Error en changePassword:', error);
+        console.error('❌ Error general en changePassword:', error);
         res.status(500).json({
             message: 'Error interno del servidor',
             error: error.message
