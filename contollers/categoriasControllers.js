@@ -37,3 +37,8 @@ const createCategory = (req, res ) => {
         }
     )
 }
+
+module.exports = {
+    getAllCategories,
+    createCategory
+};
