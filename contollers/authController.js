@@ -1080,19 +1080,19 @@ exports.changePassword = async (req, res) => {
 // Endpoint PUT /auth/admin/change-password
 exports.changePasswordAdmin = async (req, res) => {
     try {
-        const { correo, contrasenaActual, nuevaContrasena } = req.body;
-        
-        // Validate input
-        if (!correo || !contrasenaActual || !nuevaContrasena) {
+        const { id_admin, contrasenaActual, nuevaContrasena } = req.body;
+          // Validate input
+        if (!id_admin || !contrasenaActual || !nuevaContrasena) {
             return res.status(400).json({
-                message: 'Correo, contraseña actual y nueva contraseña son requeridos'
+                message: 'ID de administrador, contraseña actual y nueva contraseña son requeridos',
+                campos_requeridos: ['id_admin', 'contrasenaActual', 'nuevaContrasena']
             });
         }
         
-        // Validate email format
-        if (!validateEmail(correo)) {
+        // Validate admin ID format (should be a positive integer)
+        if (!Number.isInteger(Number(id_admin)) || Number(id_admin) <= 0) {
             return res.status(400).json({
-                message: 'Formato de correo electrónico inválido'
+                message: 'ID de administrador inválido'
             });
         }
         
@@ -1108,12 +1108,10 @@ exports.changePasswordAdmin = async (req, res) => {
             return res.status(400).json({
                 message: 'La nueva contraseña debe ser diferente a la contraseña actual'
             });
-        }
-        
-        // Find admin by email
+        }          // Find admin by ID
         pool.query(
-            'SELECT id_admin, nombre, correo, contrasena FROM administradores WHERE correo = ?',
-            [correo],
+            'SELECT id_admin, nombre, correo, contrasena FROM administradores WHERE id_admin = ?',
+            [id_admin],
             async (err, adminResults) => {
                 if (err) {
                     console.error('Error al buscar administrador:', err);
@@ -1125,7 +1123,7 @@ exports.changePasswordAdmin = async (req, res) => {
                 
                 if (adminResults.length === 0) {
                     return res.status(404).json({
-                        message: 'No se encontró un administrador con este correo electrónico'
+                        message: 'No se encontró un administrador con este ID'
                     });
                 }
                 
@@ -1162,12 +1160,23 @@ exports.changePasswordAdmin = async (req, res) => {
                                 message: 'Error al actualizar: administrador no encontrado'
                             });
                         }
-                        
-                        // Log the password change for security
+                          // Log the password change for security
                         console.log(`🔐 Contraseña de administrador cambiada exitosamente:`);
                         console.log(`   📧 Admin: ${admin.correo}`);
                         console.log(`   👤 Nombre: ${admin.nombre}`);
                         console.log(`   🕒 Timestamp: ${new Date().toISOString()}`);
+                        
+                        // Log to database for audit trail
+                        const descripcionLog = `Cambio de contraseña exitoso para administrador: ${admin.nombre} (ID: ${admin.id_admin}, Email: ${admin.correo})`;
+                        pool.query(
+                            'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+                            [admin.id_admin, 'CHANGE_PASSWORD_ADMIN', 'administradores', descripcionLog],
+                            (logErr) => {
+                                if (logErr) {
+                                    console.error('Error al registrar cambio de contraseña de admin en logs:', logErr);
+                                }
+                            }
+                        );
                         
                         // Send confirmation email (optional)
                         (async () => {
