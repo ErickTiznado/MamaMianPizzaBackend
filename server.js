@@ -25,7 +25,7 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 const corsOptions = {
     origin: [
-                'http://localhost:5173',
+        'http://localhost:5173',
         'http://localhost:5174',
         'http://localhost:3000',
         'https://panel.mamamianpizza.com',
@@ -68,7 +68,6 @@ pool.getConnection((err, connection) => {
 
 // Routes
 app.use('/api/users', userRoutes);
-app.use('/api/test', testRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/inventory', inventoriRoutes);
 app.use('/api/orders', orderRoutes);
