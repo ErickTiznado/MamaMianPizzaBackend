@@ -18,6 +18,7 @@ const resenasRoutes = require('./routes/resenasRoutes');
 const experienciaRoutes = require('./routes/experienciaRoutes');
 const authRoutes = require('./routes/authRoutes');
 const categoriasRoutes = require('./routes/categoriasRoutes');
+const segmentacionRoutes = require('./routes/segmentacionRoutes'); // Import the new route
 // Initialize express app
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -79,6 +80,7 @@ app.use('/api/resenas', resenasRoutes);
 app.use('/api/experiencias', experienciaRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/categorias', categoriasRoutes);
+app.use('/api/segmentacion', segmentacionRoutes); // Use the new route for customer segmentation
 // Default route
 app.get('/', (req, res) => {
   res.send('Mama Mian Pizza API is running');
