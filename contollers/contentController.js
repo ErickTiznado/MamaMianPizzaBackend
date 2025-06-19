@@ -197,6 +197,8 @@ exports.getMenu = (req, res) => {
       p.descripcion,
       p.imagen,
       p.activo,
+      c.nombre    AS categoria,
+      c.descripcion AS categoria_descripcion,
       t.id_tamano,
       t.nombre    AS tamano,
       t.indice    AS orden_tamano,
@@ -204,13 +206,21 @@ exports.getMenu = (req, res) => {
     FROM productos p
     JOIN precios pr ON p.id_producto = pr.pizza_id
     JOIN tamanos t  ON pr.tamano_id   = t.id_tamano
+    JOIN categorias c ON p.id_categoria = c.id_categoria
     ORDER BY p.id_producto, t.indice;
-  `;
-  pool.query(sql, (err, rows) => {
+  `;  pool.query(sql, (err, rows) => {
     if (err) {
       console.error(err);
+      // Log menu query error
+      const descripcionLog = `Error al consultar el menú - ${err.message}`;
+      logAction(null, 'READ_ERROR', 'productos', descripcionLog);
       return res.status(500).json({ message: 'Error al obtener el menú' });
     }
+    
+    // Log successful menu query
+    const descripcionLog = `Menú consultado exitosamente - ${rows.length} registros encontrados`;
+    logAction(null, 'READ', 'productos', descripcionLog);
+    
     // Agrupamos por pizza
     const mapa = {};
     rows.forEach(r => {
@@ -221,7 +231,8 @@ exports.getMenu = (req, res) => {
           descripcion: r.descripcion,
           imagen: r.imagen,
           activo: r.activo,
-
+          categoria: r.categoria,
+          categoria_descripcion: r.categoria_descripcion,
           opciones: []
         };
       }
