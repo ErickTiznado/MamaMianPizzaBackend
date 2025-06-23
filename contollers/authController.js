@@ -1,9 +1,86 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const { createTransporter, validateEmailConfig } = require('../config/emailConfig');
 const { templatePasswordReset, templatePasswordChanged, templatePasswordResetAdmin, templatePasswordChangedAdmin } = require('../config/emailTemplates');
 
-// Simple token generation (temporary solution without JWT)
+// JWT Configuration
+const JWT_SECRET = process.env.JWT_SECRET || 'mama_mian_pizza_jwt_secret_2025';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+const JWT_ADMIN_EXPIRES_IN = process.env.JWT_ADMIN_EXPIRES_IN || '8h';
+
+// Generate JWT token for regular users (temporary solution)
+const generateUserToken = (userId) => {
+    const timestamp = Date.now();
+    const randomPart = Math.random().toString(36).substring(2);
+    return Buffer.from(`${userId}:${timestamp}:${randomPart}`).toString('base64');
+};
+
+// Generate JWT token for administrators
+const generateJWTToken = (adminId, adminEmail, adminNombre, expiresIn = JWT_ADMIN_EXPIRES_IN) => {
+    const payload = {
+        id: adminId,
+        email: adminEmail,
+        nombre: adminNombre,
+        type: 'admin',
+        iat: Math.floor(Date.now() / 1000)
+    };
+    
+    return jwt.sign(payload, JWT_SECRET, {
+        expiresIn: expiresIn,
+        issuer: 'MamaMianPizza',
+        audience: 'admin'
+    });
+};
+
+// Generate temporary JWT for password reset (shorter expiration)
+const generateResetJWTToken = (adminId, purpose = 'password_reset') => {
+    const payload = {
+        id: adminId,
+        purpose: purpose,
+        type: 'admin_reset',
+        iat: Math.floor(Date.now() / 1000)
+    };
+    
+    return jwt.sign(payload, JWT_SECRET, {
+        expiresIn: '15m', // 15 minutes for password reset
+        issuer: 'MamaMianPizza',
+        audience: 'admin_reset'
+    });
+};
+
+// Validate JWT token
+const validateJWTToken = (token, expectedAudience = 'admin') => {
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET, {
+            issuer: 'MamaMianPizza',
+            audience: expectedAudience
+        });
+        
+        return {
+            valid: true,
+            data: decoded
+        };
+    } catch (error) {
+        let errorType = 'INVALID_TOKEN';
+        
+        if (error.name === 'TokenExpiredError') {
+            errorType = 'TOKEN_EXPIRED';
+        } else if (error.name === 'JsonWebTokenError') {
+            errorType = 'MALFORMED_TOKEN';
+        } else if (error.name === 'NotBeforeError') {
+            errorType = 'TOKEN_NOT_ACTIVE';
+        }
+        
+        return {
+            valid: false,
+            error: errorType,
+            message: error.message
+        };
+    }
+};
+
+// Simple token generation (temporary solution without JWT for regular users)
 const generateSimpleToken = (userId) => {
     const timestamp = Date.now();
     const randomPart = Math.random().toString(36).substring(2);
@@ -765,11 +842,10 @@ exports.verifyResetOTPAdmin = async (req, res) => {
                     message: 'Código inválido o expirado'
                 });
             }
+              const admin = results[0];
             
-            const admin = results[0];
-            
-            // Generate temporary token for password reset (15 minutes)
-            const resetToken = generateSimpleToken(admin.id_admin);
+            // Generate JWT token for password reset (15 minutes)
+            const resetToken = generateResetJWTToken(admin.id_admin, 'password_reset');
             
             // Mark reset code as used
             pool.query(
@@ -786,7 +862,8 @@ exports.verifyResetOTPAdmin = async (req, res) => {
                 message: 'Código de administrador verificado correctamente',
                 token: resetToken,
                 expires_in: '15 minutos',
-                tipo_usuario: 'administrador'
+                tipo_usuario: 'administrador',
+                token_type: 'JWT'
             });
         });
         
@@ -817,16 +894,33 @@ exports.resetPasswordAdmin = async (req, res) => {
                 message: 'La contraseña debe tener al menos 8 caracteres'
             });
         }
-        
-        // Verify and decode token
-        const decoded = validateSimpleToken(token);
-        if (!decoded) {
+          // Verify and decode JWT token
+        const tokenValidation = validateJWTToken(token, 'admin_reset');
+        if (!tokenValidation.valid) {
+            let errorMessage = 'Token inválido o expirado';
+            
+            if (tokenValidation.error === 'TOKEN_EXPIRED') {
+                errorMessage = 'El token de restablecimiento ha expirado. Solicita un nuevo código.';
+            } else if (tokenValidation.error === 'MALFORMED_TOKEN') {
+                errorMessage = 'Token malformado. Solicita un nuevo código.';
+            }
+            
             return res.status(401).json({
-                message: 'Token inválido o expirado'
+                message: errorMessage,
+                error_type: tokenValidation.error
             });
         }
         
-        const adminId = decoded.id_usuario; // Note: using same structure but for admin
+        const decoded = tokenValidation.data;
+        
+        // Verify token purpose
+        if (decoded.purpose !== 'password_reset' || decoded.type !== 'admin_reset') {
+            return res.status(401).json({
+                message: 'Token no válido para restablecimiento de contraseña'
+            });
+        }
+        
+        const adminId = decoded.id;
         
         // Hash new password
         const saltRounds = 12; // Increased security for admins
@@ -1219,6 +1313,419 @@ exports.changePasswordAdmin = async (req, res) => {
     } catch (error) {
         console.error('Error en changePasswordAdmin:', error);
         res.status(500).json({
+            message: 'Error interno del servidor',
+            error: error.message
+        });
+    }
+};
+
+// ============================
+// JWT ADMIN AUTHENTICATION SYSTEM
+// ============================
+
+// Admin Login with JWT
+exports.loginAdmin = async (req, res) => {
+    try {
+        const { correo, contrasena } = req.body;
+        
+        // Validate input
+        if (!correo || !contrasena) {
+            return res.status(400).json({
+                success: false,
+                message: 'Correo electrónico y contraseña son requeridos',
+                campos_requeridos: ['correo', 'contrasena']
+            });
+        }
+        
+        // Validate email format
+        if (!validateEmail(correo)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Formato de correo electrónico inválido'
+            });
+        }
+        
+        // Find admin by email
+        pool.query(
+            'SELECT id_admin, nombre, correo, contrasena, activo, ultimo_acceso FROM administradores WHERE correo = ?',
+            [correo],
+            async (err, adminResults) => {
+                if (err) {
+                    console.error('Error al buscar administrador:', err);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Error interno del servidor',
+                        error: err.message
+                    });
+                }
+                
+                if (adminResults.length === 0) {
+                    return res.status(401).json({
+                        success: false,
+                        message: 'Credenciales inválidas',
+                        error_type: 'INVALID_CREDENTIALS'
+                    });
+                }
+                
+                const admin = adminResults[0];
+                
+                // Check if admin account is active
+                if (!admin.activo) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Cuenta de administrador desactivada',
+                        error_type: 'ACCOUNT_DISABLED'
+                    });
+                }
+                
+                try {
+                    // Verify password
+                    const isPasswordValid = await bcrypt.compare(contrasena, admin.contrasena);
+                    
+                    if (!isPasswordValid) {
+                        return res.status(401).json({
+                            success: false,
+                            message: 'Credenciales inválidas',
+                            error_type: 'INVALID_CREDENTIALS'
+                        });
+                    }
+                    
+                    // Generate JWT token
+                    const accessToken = generateJWTToken(admin.id_admin, admin.correo, admin.nombre);
+                    
+                    // Update last access
+                    pool.query(
+                        'UPDATE administradores SET ultimo_acceso = CURRENT_TIMESTAMP WHERE id_admin = ?',
+                        [admin.id_admin],
+                        (updateErr) => {
+                            if (updateErr) {
+                                console.error('Error al actualizar último acceso:', updateErr);
+                            }
+                        }
+                    );
+                    
+                    // Log successful login
+                    const descripcionLog = `Login exitoso para administrador: ${admin.nombre} (${admin.correo})`;
+                    pool.query(
+                        'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+                        [admin.id_admin, 'ADMIN_LOGIN', 'administradores', descripcionLog],
+                        (logErr) => {
+                            if (logErr) {
+                                console.error('Error al registrar login en logs:', logErr);
+                            }
+                        }
+                    );
+                    
+                    console.log(`✅ Admin login exitoso: ${admin.correo} - ${new Date().toISOString()}`);
+                    
+                    // Send success response
+                    res.status(200).json({
+                        success: true,
+                        message: 'Autenticación exitosa',
+                        admin: {
+                            id: admin.id_admin,
+                            nombre: admin.nombre,
+                            correo: admin.correo,
+                            ultimo_acceso: admin.ultimo_acceso
+                        },
+                        token: accessToken,
+                        token_type: 'Bearer',
+                        expires_in: JWT_ADMIN_EXPIRES_IN,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                } catch (bcryptError) {
+                    console.error('Error en verificación de contraseña:', bcryptError);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Error en la verificación de credenciales',
+                        error: bcryptError.message
+                    });
+                }
+            }
+        );
+        
+    } catch (error) {
+        console.error('Error en loginAdmin:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor',
+            error: error.message
+        });
+    }
+};
+
+// Refresh JWT Token for Admin
+exports.refreshAdminToken = async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({
+                success: false,
+                message: 'Token de autorización requerido',
+                error_type: 'MISSING_TOKEN'
+            });
+        }
+        
+        const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+        
+        // Validate current token (even if expired)
+        const tokenValidation = validateJWTToken(token, 'admin');
+        
+        if (!tokenValidation.valid && tokenValidation.error !== 'TOKEN_EXPIRED') {
+            return res.status(401).json({
+                success: false,
+                message: 'Token inválido',
+                error_type: tokenValidation.error
+            });
+        }
+        
+        let adminId;
+        if (tokenValidation.valid) {
+            adminId = tokenValidation.data.id;
+        } else {
+            // For expired tokens, decode without verification to get admin ID
+            try {
+                const decoded = jwt.decode(token);
+                adminId = decoded.id;
+            } catch (decodeError) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Token malformado',
+                    error_type: 'MALFORMED_TOKEN'
+                });
+            }
+        }
+        
+        // Verify admin still exists and is active
+        pool.query(
+            'SELECT id_admin, nombre, correo, activo FROM administradores WHERE id_admin = ?',
+            [adminId],
+            (err, adminResults) => {
+                if (err) {
+                    console.error('Error al verificar administrador:', err);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Error interno del servidor',
+                        error: err.message
+                    });
+                }
+                
+                if (adminResults.length === 0) {
+                    return res.status(401).json({
+                        success: false,
+                        message: 'Administrador no encontrado',
+                        error_type: 'ADMIN_NOT_FOUND'
+                    });
+                }
+                
+                const admin = adminResults[0];
+                
+                if (!admin.activo) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Cuenta de administrador desactivada',
+                        error_type: 'ACCOUNT_DISABLED'
+                    });
+                }
+                
+                // Generate new token
+                const newAccessToken = generateJWTToken(admin.id_admin, admin.correo, admin.nombre);
+                
+                // Log token refresh
+                const descripcionLog = `Token JWT renovado para administrador: ${admin.nombre} (${admin.correo})`;
+                pool.query(
+                    'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+                    [admin.id_admin, 'ADMIN_TOKEN_REFRESH', 'administradores', descripcionLog],
+                    (logErr) => {
+                        if (logErr) {
+                            console.error('Error al registrar renovación de token en logs:', logErr);
+                        }
+                    }
+                );
+                
+                console.log(`🔄 Token renovado para admin: ${admin.correo} - ${new Date().toISOString()}`);
+                
+                res.status(200).json({
+                    success: true,
+                    message: 'Token renovado exitosamente',
+                    admin: {
+                        id: admin.id_admin,
+                        nombre: admin.nombre,
+                        correo: admin.correo
+                    },
+                    token: newAccessToken,
+                    token_type: 'Bearer',
+                    expires_in: JWT_ADMIN_EXPIRES_IN,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        );
+        
+    } catch (error) {
+        console.error('Error en refreshAdminToken:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor',
+            error: error.message
+        });
+    }
+};
+
+// Verify JWT Token Middleware for Admin
+exports.verifyAdminToken = (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+        
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({
+                success: false,
+                message: 'Token de autorización requerido',
+                error_type: 'MISSING_TOKEN'
+            });
+        }
+        
+        const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+        
+        // Validate JWT token
+        const tokenValidation = validateJWTToken(token, 'admin');
+        
+        if (!tokenValidation.valid) {
+            let errorMessage = 'Token inválido';
+            
+            if (tokenValidation.error === 'TOKEN_EXPIRED') {
+                errorMessage = 'Token expirado. Por favor, inicia sesión nuevamente.';
+            } else if (tokenValidation.error === 'MALFORMED_TOKEN') {
+                errorMessage = 'Token malformado';
+            }
+            
+            return res.status(401).json({
+                success: false,
+                message: errorMessage,
+                error_type: tokenValidation.error
+            });
+        }
+        
+        const decoded = tokenValidation.data;
+        
+        // Verify token type
+        if (decoded.type !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Token no válido para administradores',
+                error_type: 'INVALID_TOKEN_TYPE'
+            });
+        }
+        
+        // Add admin info to request object
+        req.admin = {
+            id: decoded.id,
+            email: decoded.email,
+            nombre: decoded.nombre,
+            type: decoded.type
+        };
+        
+        // Continue to next middleware/route handler
+        next();
+        
+    } catch (error) {
+        console.error('Error en verifyAdminToken middleware:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor',
+            error: error.message
+        });
+    }
+};
+
+// Get Admin Profile (protected route)
+exports.getAdminProfile = async (req, res) => {
+    try {
+        const adminId = req.admin.id;
+        
+        // Get admin details from database
+        pool.query(
+            'SELECT id_admin, nombre, correo, activo, ultimo_acceso, fecha_creacion FROM administradores WHERE id_admin = ?',
+            [adminId],
+            (err, adminResults) => {
+                if (err) {
+                    console.error('Error al obtener perfil de administrador:', err);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Error interno del servidor',
+                        error: err.message
+                    });
+                }
+                
+                if (adminResults.length === 0) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'Administrador no encontrado',
+                        error_type: 'ADMIN_NOT_FOUND'
+                    });
+                }
+                
+                const admin = adminResults[0];
+                
+                res.status(200).json({
+                    success: true,
+                    message: 'Perfil de administrador obtenido exitosamente',
+                    admin: {
+                        id: admin.id_admin,
+                        nombre: admin.nombre,
+                        correo: admin.correo,
+                        activo: admin.activo,
+                        ultimo_acceso: admin.ultimo_acceso,
+                        fecha_creacion: admin.fecha_creacion
+                    },
+                    timestamp: new Date().toISOString()
+                });
+            }
+        );
+        
+    } catch (error) {
+        console.error('Error en getAdminProfile:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor',
+            error: error.message
+        });
+    }
+};
+
+// Admin Logout (invalidate token - client-side)
+exports.logoutAdmin = async (req, res) => {
+    try {
+        const adminId = req.admin.id;
+        const adminNombre = req.admin.nombre;
+        const adminEmail = req.admin.email;
+        
+        // Log logout action
+        const descripcionLog = `Logout para administrador: ${adminNombre} (${adminEmail})`;
+        pool.query(
+            'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+            [adminId, 'ADMIN_LOGOUT', 'administradores', descripcionLog],
+            (logErr) => {
+                if (logErr) {
+                    console.error('Error al registrar logout en logs:', logErr);
+                }
+            }
+        );
+        
+        console.log(`🚪 Admin logout: ${adminEmail} - ${new Date().toISOString()}`);
+        
+        res.status(200).json({
+            success: true,
+            message: 'Sesión cerrada exitosamente',
+            timestamp: new Date().toISOString(),
+            note: 'El token debe ser eliminado del cliente'
+        });
+        
+    } catch (error) {
+        console.error('Error en logoutAdmin:', error);
+        res.status(500).json({
+            success: false,
             message: 'Error interno del servidor',
             error: error.message
         });
