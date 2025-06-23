@@ -8,6 +8,13 @@ const actualDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 // Server base URL
 const SERVER_BASE_URL = 'https://api.mamamianpizza.com';
 
+// Helper function to extract user ID from request (for future authentication)
+const getUserId = (req) => {
+    // TODO: Implementar cuando se agregue autenticación
+    // return req.user?.id || req.userId || null;
+    return null; // Por ahora devolvemos null hasta implementar auth
+};
+
 // Helper function to log actions to database
 const logAction = (id_usuario, accion, tabla_afectada, descripcion) => {
     pool.query(
@@ -67,8 +74,7 @@ const getCategoryId = (categoryName, callback) => {
                 if (err) {
                     callback(err, null);
                     return;
-                }
-                // Log new category creation
+                }                // Log new category creation (getCategoryId doesn't have access to req)
                 const descripcionLog = `Nueva categoría creada: "${categoryName}" (ID: ${result.insertId})`;
                 logAction(null, 'CREATE', 'categorias', descripcionLog);
                 callback(null, result.insertId);
@@ -113,10 +119,9 @@ exports.submitContent = (req, res) => {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actualDate, actualDate],        (err, result) => {
           if (err) {
-            console.error(err);
-            // Log product creation error
+            console.error(err);            // Log product creation error
             const descripcionLog = `Error al crear producto: "${titulo}" - ${err.message}`;
-            logAction(null, 'CREATE_ERROR', 'productos', descripcionLog);
+            logAction(getUserId(req), 'CREATE_ERROR', 'productos', descripcionLog);
             return res.status(500).json({ message: 'Error al crear el producto' });
           }
           const pizzaId = result.insertId;
@@ -131,16 +136,14 @@ exports.submitContent = (req, res) => {
               [pizzaId, tamanoId, parseFloat(precio)],
               err => {                if (err && !fallo) {
                   fallo = true;
-                  console.error('Error al insertar precio', err);
-                  // Log price insertion error during creation
+                  console.error('Error al insertar precio', err);                  // Log price insertion error during creation
                   const descripcionLog = `Error al guardar precios del producto: "${titulo}" (ID: ${pizzaId}) - ${err.message}`;
-                  logAction(null, 'CREATE_ERROR', 'precios', descripcionLog);
+                  logAction(getUserId(req), 'CREATE_ERROR', 'precios', descripcionLog);
                   return res.status(500).json({ message: 'Error al guardar precios' });
                 }pendientes--;
-                if (pendientes === 0 && !fallo) {
-                  // Log successful product creation
+                if (pendientes === 0 && !fallo) {                  // Log successful product creation
                   const descripcionLog = `Producto creado: "${titulo}" (ID: ${pizzaId}) en categoría "${categoria}" con ${entries.length} precios configurados`;
-                  logAction(null, 'CREATE', 'productos', descripcionLog);
+                  logAction(getUserId(req), 'CREATE', 'productos', descripcionLog);
                   
                   res.status(201).json({
                     message: 'Producto y precios creados exitosamente',
@@ -150,10 +153,9 @@ exports.submitContent = (req, res) => {
               }
             );
           });          // Si no hay tamaños (no debería pasar), devolvemos ya:
-          if (entries.length === 0) {
-            // Log product creation without prices
+          if (entries.length === 0) {            // Log product creation without prices
             const descripcionLog = `Producto creado sin precios: "${titulo}" (ID: ${pizzaId}) en categoría "${categoria}"`;
-            logAction(null, 'CREATE', 'productos', descripcionLog);
+            logAction(getUserId(req), 'CREATE', 'productos', descripcionLog);
             
             res.status(201).json({
               message: 'Producto creado sin precios (ajusta tu formulario)',
@@ -170,9 +172,15 @@ exports.submitContent = (req, res) => {
 exports.getLasMasPopulares = (req, res) => {
     pool.query('SELECT * FROM productos WHERE seccion = "Las más populares" ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {
         if(err){
-            console.error('Error al obtener productos', err);
+            console.error('Error al obtener productos', err);            // Log error when getting popular products
+            const descripcionLog = `Error al consultar productos más populares - ${err.message}`;
+            logAction(getUserId(req), 'READ_ERROR', 'productos', descripcionLog);
             return res.status(500).json({ message: 'Error al obtener productos' });
         }
+          // Log successful query
+        const descripcionLog = `Productos más populares consultados exitosamente - ${results.length} productos encontrados`;
+        logAction(getUserId(req), 'READ', 'productos', descripcionLog);
+        
         res.status(200).json({ message: 'Productos obtenidos exitosamente', productos: results });
         console.log('Productos obtenidos exitosamente', results);
     })
@@ -182,9 +190,15 @@ exports.getLasMasPopulares = (req, res) => {
 exports.getRecomendacionDeLacasa = (req, res) => {
     pool.query('SELECT * FROM productos where seccion = "Recomendación de la casa" ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {
         if(err){
-            console.error('Error al obtener productos', err);
+            console.error('Error al obtener productos', err);            // Log error when getting house recommendations
+            const descripcionLog = `Error al consultar recomendaciones de la casa - ${err.message}`;
+            logAction(getUserId(req), 'READ_ERROR', 'productos', descripcionLog);
             return res.status(500).json({ message: 'Error al obtener productos' });
         }
+          // Log successful query
+        const descripcionLog = `Recomendaciones de la casa consultadas exitosamente - ${results.length} productos encontrados`;
+        logAction(getUserId(req), 'READ', 'productos', descripcionLog);
+        
         res.status(200).json({message: 'Productos obtenidos exitosamente', productos: results });            
     })
     }
@@ -210,16 +224,14 @@ exports.getMenu = (req, res) => {
     ORDER BY p.id_producto, t.indice;
   `;  pool.query(sql, (err, rows) => {
     if (err) {
-      console.error(err);
-      // Log menu query error
+      console.error(err);      // Log menu query error
       const descripcionLog = `Error al consultar el menú - ${err.message}`;
-      logAction(null, 'READ_ERROR', 'productos', descripcionLog);
+      logAction(getUserId(req), 'READ_ERROR', 'productos', descripcionLog);
       return res.status(500).json({ message: 'Error al obtener el menú' });
     }
-    
-    // Log successful menu query
+      // Log successful menu query
     const descripcionLog = `Menú consultado exitosamente - ${rows.length} registros encontrados`;
-    logAction(null, 'READ', 'productos', descripcionLog);
+    logAction(getUserId(req), 'READ', 'productos', descripcionLog);
     
     // Agrupamos por pizza
     const mapa = {};
@@ -259,35 +271,38 @@ exports.getMenu = (req, res) => {
               // Después eliminar el producto
             pool.query('DELETE FROM productos WHERE id_producto = ?', [id_producto], (err, productResults) => {
                 if(err){
-                    console.error('Error al eliminar el producto', err);
-                    // Log product deletion error
+                    console.error('Error al eliminar el producto', err);                    // Log product deletion error
                     const descripcionLog = `Error al eliminar producto (ID: ${id_producto}) - ${err.message}`;
-                    logAction(null, 'DELETE_ERROR', 'productos', descripcionLog);
+                    logAction(getUserId(req), 'DELETE_ERROR', 'productos', descripcionLog);
                     return res.status(500).json({ message: 'Error al eliminar el producto' });
                 }
                   if(productResults.affectedRows === 0){
                     return res.status(404).json({ message: 'Producto no encontrado' });
                 }
-                
-                // Log successful product deletion
+                  // Log successful product deletion
                 const descripcionLog = `Producto eliminado (ID: ${id_producto}) junto con ${priceResults.affectedRows} precios asociados`;
-                logAction(null, 'DELETE', 'productos', descripcionLog);
+                logAction(getUserId(req), 'DELETE', 'productos', descripcionLog);
                 
                 res.status(200).json({ 
                     message: 'Producto y sus precios eliminados exitosamente',
                     preciosEliminados: priceResults.affectedRows,
-                    productosEliminados: productResults.affectedRows
-                });
+                    productosEliminados: productResults.affectedRows                });
             });
         });
-    }
+    };
 
     exports.TotalProducts = (req, res) => {
         pool.query('SELECT COUNT(*) as total FROM productos', (err, results) => {
             if(err){
-                console.error('Error al obtener el total de productos', err);
+                console.error('Error al obtener el total de productos', err);                // Log error when getting total products
+                const descripcionLog = `Error al consultar total de productos - ${err.message}`;
+                logAction(getUserId(req), 'READ_ERROR', 'productos', descripcionLog);
                 return res.status(500).json({ message: 'Error al obtener el total de productos' });
             }
+              // Log successful query
+            const descripcionLog = `Total de productos consultado exitosamente - ${results[0].total} productos encontrados`;
+            logAction(getUserId(req), 'READ', 'productos', descripcionLog);
+            
             res.status(200).json({ message: 'Total de productos obtenidos exitosamente', total: results[0].total });
         })
     }
@@ -322,10 +337,9 @@ exports.getMenu = (req, res) => {
          WHERE id_producto = ?`,
         [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actDate, id_producto],        err => {
           if (err) {
-            console.error(err);
-            // Log product update error
+            console.error(err);            // Log product update error
             const descripcionLog = `Error al actualizar producto: "${titulo}" (ID: ${id_producto}) - ${err.message}`;
-            logAction(null, 'UPDATE_ERROR', 'productos', descripcionLog);
+            logAction(getUserId(req), 'UPDATE_ERROR', 'productos', descripcionLog);
             return res.status(500).json({ message: 'Error al actualizar el producto' });
           }
 
@@ -334,10 +348,9 @@ exports.getMenu = (req, res) => {
             `DELETE FROM precios WHERE pizza_id = ?`,
             [id_producto],
             err => {              if (err) {
-                console.error(err);
-                // Log price deletion error during update
+                console.error(err);                // Log price deletion error during update
                 const descripcionLog = `Error al limpiar precios antiguos del producto (ID: ${id_producto}) - ${err.message}`;
-                logAction(null, 'UPDATE_ERROR', 'precios', descripcionLog);
+                logAction(getUserId(req), 'UPDATE_ERROR', 'precios', descripcionLog);
                 return res.status(500).json({ message: 'Error al limpiar precios antiguos' });
               }
 
@@ -351,16 +364,14 @@ exports.getMenu = (req, res) => {
                   [id_producto, tamanoId, parseFloat(precio)],
                   err => {                    if (err && !fallo) {
                       fallo = true;
-                      console.error(err);
-                      // Log price insertion error during update
+                      console.error(err);                      // Log price insertion error during update
                       const descripcionLog = `Error al guardar nuevos precios del producto (ID: ${id_producto}) - ${err.message}`;
-                      logAction(null, 'UPDATE_ERROR', 'precios', descripcionLog);
+                      logAction(getUserId(req), 'UPDATE_ERROR', 'precios', descripcionLog);
                       return res.status(500).json({ message: 'Error al guardar nuevos precios' });
                     }pendientes--;
-                    if (pendientes === 0 && !fallo) {
-                      // Log successful product update
+                    if (pendientes === 0 && !fallo) {                      // Log successful product update
                       const descripcionLog = `Producto actualizado: "${titulo}" (ID: ${id_producto}) en categoría "${categoria}" con ${entries.length} precios actualizados`;
-                      logAction(null, 'UPDATE', 'productos', descripcionLog);
+                      logAction(getUserId(req), 'UPDATE', 'productos', descripcionLog);
                       
                       res.status(200).json({
                         message: 'Producto y precios actualizados exitosamente',
@@ -369,10 +380,9 @@ exports.getMenu = (req, res) => {
                     }
                   }
                 );
-              });              if (entries.length === 0) {
-                // Log product update without prices
+              });              if (entries.length === 0) {                // Log product update without prices
                 const descripcionLog = `Producto actualizado sin precios: "${titulo}" (ID: ${id_producto}) en categoría "${categoria}"`;
-                logAction(null, 'UPDATE', 'productos', descripcionLog);
+                logAction(getUserId(req), 'UPDATE', 'productos', descripcionLog);
                 
                 res.status(200).json({
                   message: 'Producto actualizado sin precios (verifica tu formulario)',
