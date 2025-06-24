@@ -48,7 +48,4 @@ router.put('/admin/reset-password', authController.resetPasswordAdmin);
 // Change password directly for admin (with current password)
 router.put('/admin/change-password', authController.changePasswordAdmin);
 
-// DEBUG: Diagnóstico de contraseñas (TEMPORAL - remover en producción)
-router.get('/admin/debug-password/:id', authController.debugAdminPassword);
-
 module.exports = router;
