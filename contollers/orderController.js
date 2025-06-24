@@ -572,8 +572,12 @@ exports.createOrder = async (req, res) => {
     // Start a transaction
     let connection;
     try {
+        console.log('🔄 [ORDEN] Iniciando proceso de creación de pedido');
+        console.log('📦 [ORDEN] Datos recibidos:', JSON.stringify(req.body, null, 2));
+        
         connection = await pool.promise().getConnection();
         await connection.beginTransaction();
+        console.log('✅ [DB] Conexión establecida y transacción iniciada');
         
         const {
             tipo_cliente,
@@ -587,7 +591,17 @@ exports.createOrder = async (req, res) => {
             total,
             aceptado_terminos,
             tiempo_estimado_entrega
-        } = req.body;        // ENHANCED VALIDATION WITH SPECIFIC ERROR MESSAGES
+        } = req.body;
+
+        console.log('🔍 [VALIDACION] Iniciando validación de datos del pedido');
+        console.log(`📋 [VALIDACION] Tipo de cliente: ${tipo_cliente}`);
+        console.log(`👤 [VALIDACION] Cliente:`, cliente);
+        console.log(`📍 [VALIDACION] Dirección:`, direccion);
+        console.log(`💳 [VALIDACION] Método de pago: ${metodo_pago}`);
+        console.log(`🛒 [VALIDACION] Número de productos: ${productos ? productos.length : 0}`);
+        console.log(`💰 [VALIDACION] Total: ${total}`);
+
+        // ENHANCED VALIDATION WITH SPECIFIC ERROR MESSAGES
         const errors = [];
         const missingFields = [];
         
@@ -600,170 +614,111 @@ exports.createOrder = async (req, res) => {
         if (!total) missingFields.push('total');
         
         if (missingFields.length > 0) {
-            return res.status(400).json({ 
-                message: 'Faltan datos requeridos para el pedido',
-                detalle: `Campos faltantes: ${missingFields.join(', ')}`,
-                campos_requeridos: {
-                    tipo_cliente: 'Tipo de cliente (registrado/invitado)',
-                    cliente: 'Información del cliente',
-                    direccion: 'Dirección de entrega',
-                    metodo_pago: 'Método de pago',
-                    productos: 'Lista de productos',
-                    total: 'Total del pedido'
-                },
-                campos_faltantes: missingFields
+            console.error('❌ [VALIDACION] Campos faltantes:', missingFields);
+            return res.status(400).json({
+                message: 'Faltan campos requeridos',
+                missing_fields: missingFields
             });
         }
 
         // Validate client data based on client type
         if (cliente) {
-            const clienteErrors = [];
-            
-            if (tipo_cliente === 'registrado') {
-                if (!cliente.email) clienteErrors.push('email');
-                if (!cliente.password) clienteErrors.push('password');
+            console.log('🔍 [VALIDACION] Validando datos del cliente');
+            if (!cliente.nombre || !cliente.apellido) {
+                console.error('❌ [VALIDACION] Faltan nombre o apellido del cliente');
+                errors.push('Nombre y apellido del cliente son requeridos');
             }
-            
-            // Common client validations for both types
-            if (!cliente.nombre) clienteErrors.push('nombre');
-            if (!cliente.telefono) clienteErrors.push('telefono');
-            
-            if (clienteErrors.length > 0) {
-                return res.status(400).json({
-                    message: 'Faltan datos del cliente',
-                    detalle: `Campos del cliente faltantes: ${clienteErrors.join(', ')}`,
-                    tipo_cliente: tipo_cliente,
-                    campos_cliente_requeridos: tipo_cliente === 'registrado' 
-                        ? ['nombre', 'telefono', 'email', 'password']
-                        : ['nombre', 'telefono'],
-                    campos_cliente_faltantes: clienteErrors
-                });
+            if (!cliente.telefono) {
+                console.error('❌ [VALIDACION] Falta teléfono del cliente');
+                errors.push('Teléfono del cliente es requerido');
             }
+            if (tipo_cliente === 'registrado' && !cliente.email) {
+                console.error('❌ [VALIDACION] Email requerido para usuario registrado');
+                errors.push('Email es requerido para usuarios registrados');
+            }
+            console.log('✅ [VALIDACION] Datos del cliente validados');
         }
 
         // Validate address data
         if (direccion) {
-            const direccionErrors = [];
-            
-            if (direccion.tipo_direccion === 'formulario') {
-                if (!direccion.direccion) direccionErrors.push('direccion');
-                if (!direccion.pais) direccionErrors.push('pais');
-                if (!direccion.departamento) direccionErrors.push('departamento');
-                if (!direccion.municipio) direccionErrors.push('municipio');
-            } else if (direccion.tipo_direccion === 'tiempo_real') {
-                if (!direccion.latitud) direccionErrors.push('latitud');
-                if (!direccion.longitud) direccionErrors.push('longitud');
-                if (!direccion.direccion_formateada) direccionErrors.push('direccion_formateada');
-            } else {
-                direccionErrors.push('tipo_direccion (debe ser "formulario" o "tiempo_real")');
+            console.log('🔍 [VALIDACION] Validando datos de dirección');
+            if (!direccion.direccion) {
+                console.error('❌ [VALIDACION] Falta dirección');
+                errors.push('Dirección es requerida');
             }
-            
-            if (direccionErrors.length > 0) {
-                return res.status(400).json({
-                    message: 'Faltan datos de dirección',
-                    detalle: `Campos de dirección faltantes: ${direccionErrors.join(', ')}`,
-                    tipo_direccion: direccion.tipo_direccion,
-                    campos_direccion_requeridos: direccion.tipo_direccion === 'formulario' 
-                        ? ['direccion', 'pais', 'departamento', 'municipio']
-                        : ['latitud', 'longitud', 'direccion_formateada'],
-                    campos_direccion_faltantes: direccionErrors
-                });
+            if (!direccion.latitud || !direccion.longitud) {
+                console.error('❌ [VALIDACION] Faltan coordenadas de dirección');
+                errors.push('Latitud y longitud son requeridas');
             }
+            console.log('✅ [VALIDACION] Datos de dirección validados');
         }
 
         // Validate products array
         if (!Array.isArray(productos) || productos.length === 0) {
-            return res.status(400).json({ 
-                message: 'El pedido debe contener al menos un producto',
-                detalle: 'El campo "productos" debe ser un array con al menos un elemento',
-                ejemplo_producto: {
-                    nombre_producto: 'Pizza Margarita',
-                    cantidad: 1,
-                    precio_unitario: 12.50,
-                    subtotal: 12.50,
-                    masa: 'tradicional',
-                    tamano: 'mediana',
-                    instrucciones_especiales: 'Sin cebolla'
-                }
-            });
+            console.error('❌ [VALIDACION] Lista de productos vacía o inválida');
+            errors.push('Se requiere al menos un producto en el pedido');
         }
 
         // Validate each product structure
         const productErrors = [];
         productos.forEach((producto, index) => {
-            const productoErrors = [];
-            
-            if (!producto.nombre_producto) productoErrors.push('nombre_producto');
-            if (!producto.cantidad || producto.cantidad <= 0) productoErrors.push('cantidad (debe ser mayor a 0)');
-            if (!producto.precio_unitario || producto.precio_unitario <= 0) productoErrors.push('precio_unitario (debe ser mayor a 0)');
-            
-            if (productoErrors.length > 0) {
-                productErrors.push({
-                    indice: index,
-                    producto: producto.nombre_producto || 'Sin nombre',
-                    campos_faltantes: productoErrors
-                });
+            console.log(`🔍 [VALIDACION] Validando producto ${index + 1}:`, producto);
+            if (!producto.nombre) {
+                productErrors.push(`Producto ${index + 1}: falta nombre`);
+            }
+            if (!producto.precio || isNaN(producto.precio) || producto.precio <= 0) {
+                productErrors.push(`Producto ${index + 1}: precio inválido`);
+            }
+            if (!producto.cantidad || isNaN(producto.cantidad) || producto.cantidad <= 0) {
+                productErrors.push(`Producto ${index + 1}: cantidad inválida`);
             }
         });
 
         if (productErrors.length > 0) {
-            return res.status(400).json({ 
-                message: 'Datos de productos incompletos',
-                detalle: 'Uno o más productos tienen datos faltantes o inválidos',
-                productos_con_errores: productErrors,
-                campos_producto_requeridos: ['nombre_producto', 'cantidad', 'precio_unitario'],
-                ejemplo_producto_valido: {
-                    nombre_producto: 'Pizza Margarita',
-                    cantidad: 1,
-                    precio_unitario: 12.50,
-                    subtotal: 12.50
-                }
-            });
+            console.error('❌ [VALIDACION] Errores en productos:', productErrors);
+            errors.push(...productErrors);
         }
 
         // Validate payment method
         const metodosValidos = ['efectivo', 'tarjeta', 'transferencia'];
         if (!metodosValidos.includes(metodo_pago)) {
-            return res.status(400).json({
-                message: 'Método de pago inválido',
-                detalle: `El método de pago "${metodo_pago}" no es válido`,
-                metodos_validos: metodosValidos
-            });
+            console.error(`❌ [VALIDACION] Método de pago inválido: ${metodo_pago}`);
+            errors.push(`Método de pago debe ser uno de: ${metodosValidos.join(', ')}`);
         }
 
         // Validate payment method specific fields
         if (metodo_pago === 'tarjeta') {
-            const tarjetaErrors = [];
-            if (!req.body.num_tarjeta_masked) tarjetaErrors.push('num_tarjeta_masked');
-            if (!req.body.nombre_tarjeta) tarjetaErrors.push('nombre_tarjeta');
-            
-            if (tarjetaErrors.length > 0) {
-                return res.status(400).json({
-                    message: 'Faltan datos de tarjeta',
-                    detalle: `Para pagos con tarjeta se requieren: ${tarjetaErrors.join(', ')}`,
-                    campos_tarjeta_requeridos: ['num_tarjeta_masked', 'nombre_tarjeta'],
-                    campos_tarjeta_faltantes: tarjetaErrors
-                });
+            console.log('🔍 [VALIDACION] Validando datos de tarjeta');
+            if (!req.body.num_tarjeta_masked || !req.body.nombre_tarjeta) {
+                console.error('❌ [VALIDACION] Faltan datos de tarjeta');
+                errors.push('Para pago con tarjeta se requiere número enmascarado y nombre en la tarjeta');
             }
         }
 
         // Validate numeric fields
         if (isNaN(total) || total <= 0) {
-            return res.status(400).json({
-                message: 'Total inválido',
-                detalle: 'El total debe ser un número mayor a 0',
-                valor_recibido: total
-            });
+            console.error(`❌ [VALIDACION] Total inválido: ${total}`);
+            errors.push('Total debe ser un número positivo');
         }
 
         if (subtotal && (isNaN(subtotal) || subtotal <= 0)) {
+            console.error(`❌ [VALIDACION] Subtotal inválido: ${subtotal}`);
+            errors.push('Subtotal debe ser un número positivo');
+        }
+
+        if (errors.length > 0) {
+            console.error('❌ [VALIDACION] Errores encontrados:', errors);
             return res.status(400).json({
-                message: 'Subtotal inválido',
-                detalle: 'El subtotal debe ser un número mayor a 0',
-                valor_recibido: subtotal
+                message: 'Errores de validación',
+                errors: errors
             });
-        }        // Generate unique order code
+        }
+
+        console.log('✅ [VALIDACION] Todas las validaciones pasadas correctamente');
+
+        // Generate unique order code
         const codigo_pedido = generateOrderCode();
+        console.log(`🔢 [ORDEN] Código de pedido generado: ${codigo_pedido}`);
 
         let id_usuario = null;
         let id_usuario_invitado = null;
@@ -771,96 +726,58 @@ exports.createOrder = async (req, res) => {
 
         // Handle user data based on client type
         if (tipo_cliente === 'registrado') {
-            // Authenticate user
-            const [users] = await connection.query(
-                'SELECT * FROM usuarios WHERE correo = ?', 
+            console.log('👤 [USUARIO] Procesando usuario registrado');
+            
+            // Check if user exists by email
+            const [existingUsers] = await connection.query(
+                'SELECT id_usuario FROM usuarios WHERE email = ?',
                 [cliente.email]
             );
             
-            if (users.length === 0) {
-                return res.status(401).json({ message: 'Usuario no encontrado' });
-            }
-
-            const user = users[0];
-            const isMatch = await bcrypt.compare(cliente.password, user.contrasena);
-            
-            if (!isMatch) {
-                return res.status(401).json({ message: 'Credenciales inválidas' });
-            }
-
-            id_usuario = user.id_usuario;
-            
-            // Create or update address
-            if (direccion.tipo_direccion === 'formulario') {
-                const [addressResult] = await connection.query(
-                    'INSERT INTO direcciones (id_usuario, direccion, tipo_direccion, pais, departamento, municipio) VALUES (?, ?, ?, ?, ?, ?)',
-                    [id_usuario, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio]
-                );
-                id_direccion = addressResult.insertId;
+            if (existingUsers.length > 0) {
+                id_usuario = existingUsers[0].id_usuario;
+                console.log(`✅ [USUARIO] Usuario existente encontrado con ID: ${id_usuario}`);
             } else {
-                const [addressResult] = await connection.query(
-                    'INSERT INTO direcciones (id_usuario, tipo_direccion, latitud, longitud, precision_ubicacion, direccion_formateada) VALUES (?, ?, ?, ?, ?, ?)',
-                    [id_usuario, 'tiempo_real', direccion.latitud, direccion.longitud, direccion.precision_ubicacion, direccion.direccion_formateada]
+                console.log('⚠️ [USUARIO] Usuario registrado no encontrado, creando usuario temporal');
+                // Create temporary user for registered user not found in database
+                const [userResult] = await connection.query(
+                    'INSERT INTO usuarios (nombre, apellido, email, celular, activo) VALUES (?, ?, ?, ?, 1)',
+                    [cliente.nombre, cliente.apellido, cliente.email, cliente.telefono]
                 );
-                id_direccion = addressResult.insertId;
-            }        } else {
-            // Para clientes invitados, verificamos si ya existe en usuarios_invitados
-            const [existingGuests] = await connection.query(
-                'SELECT * FROM usuarios_invitados WHERE celular = ?',
-                [cliente.telefono]
+                id_usuario = userResult.insertId;
+                console.log(`✅ [USUARIO] Usuario temporal creado con ID: ${id_usuario}`);
+            }
+        } else {
+            console.log('👤 [USUARIO] Procesando usuario invitado');
+            
+            // Save guest user data to usuarios_invitados table
+            const [guestUserResult] = await connection.query(
+                'INSERT INTO usuarios_invitados (nombre, apellido, celular, email) VALUES (?, ?, ?, ?)',
+                [cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null]
             );
+            id_usuario_invitado = guestUserResult.insertId;
+            console.log(`✅ [USUARIO] Usuario invitado creado con ID: ${id_usuario_invitado}`);
             
-            if (existingGuests.length > 0) {
-                // Si ya existe, usamos ese ID y actualizamos la información
-                id_usuario_invitado = existingGuests[0].id_usuario_invitado;
-                
-                await connection.query(
-                    'UPDATE usuarios_invitados SET nombre = ?, apellido = ?, ultimo_pedido = CURRENT_TIMESTAMP WHERE id_usuario_invitado = ?',
-                    [cliente.nombre, cliente.apellido || '', id_usuario_invitado]
-                );
-            } else {
-                // Si no existe, creamos un nuevo usuario invitado SOLO en usuarios_invitados
-                const [guestResult] = await connection.query(
-                    'INSERT INTO usuarios_invitados (nombre, apellido, celular, fecha_creacion, ultimo_pedido) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
-                    [
-                        cliente.nombre, 
-                        cliente.apellido || '',
-                        cliente.telefono
-                    ]
-                );
-                
-                id_usuario_invitado = guestResult.insertId;
-            }
-
-            // Para direcciones de usuarios invitados, creamos un usuario temporal SOLO si es necesario
-            // para mantener la integridad referencial con la tabla direcciones
+            // Create temporary user in usuarios table for address linking (due to FK constraint)
             const [tempUserResult] = await connection.query(
-                'INSERT INTO usuarios (nombre, correo, contrasena, celular) VALUES (?, ?, ?, ?)',
-                [
-                    `Invitado-${cliente.nombre}`, 
-                    `invitado_${cliente.telefono}_${Date.now()}@mamamianpizza.com`, // Email temporal único
-                    await bcrypt.hash('no_password_guest', 5), // Hash dummy para usuarios invitados
-                    cliente.telefono
-                ]
+                'INSERT INTO usuarios (nombre, apellido, email, celular, activo) VALUES (?, ?, ?, ?, 0)',
+                [cliente.nombre, cliente.apellido, cliente.email || `temp_${Date.now()}@guest.com`, cliente.telefono]
             );
-            
             id_usuario = tempUserResult.insertId;
+            console.log(`✅ [USUARIO] Usuario temporal para FK creado con ID: ${id_usuario}`);
+        }
 
-            // Crear la dirección usando el usuario temporal
-            if (direccion.tipo_direccion === 'formulario') {
-                const [addressResult] = await connection.query(
-                    'INSERT INTO direcciones (id_usuario, direccion, tipo_direccion, pais, departamento, municipio, referencias) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    [id_usuario, direccion.direccion, 'formulario', direccion.pais, direccion.departamento, direccion.municipio, direccion.referencias || null]
-                );
-                id_direccion = addressResult.insertId;
-            } else {
-                const [addressResult] = await connection.query(
-                    'INSERT INTO direcciones (id_usuario, direccion, tipo_direccion, latitud, longitud, precision_ubicacion, direccion_formateada) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    [id_usuario, direccion.direccion_formateada || 'Ubicación en tiempo real', 'tiempo_real', direccion.latitud, direccion.longitud, direccion.precision_ubicacion, direccion.direccion_formateada]
-                );
-                id_direccion = addressResult.insertId;
-            }
-        }// Create new order
+        // Create address
+        console.log('📍 [DIRECCION] Creando dirección');
+        const [addressResult] = await connection.query(
+            'INSERT INTO direcciones (id_usuario, direccion, latitud, longitud, direccion_formateada) VALUES (?, ?, ?, ?, ?)',
+            [id_usuario, direccion.direccion, direccion.latitud, direccion.longitud, direccion.direccion_formateada || direccion.direccion]
+        );
+        id_direccion = addressResult.insertId;
+        console.log(`✅ [DIRECCION] Dirección creada con ID: ${id_direccion}`);
+
+        // Create new order
+        console.log('📝 [ORDEN] Creando registro de pedido');
         const orderInsertFields = [
             'codigo_pedido', 'id_usuario', 'id_direccion', 'estado', 'total', 'tipo_cliente', 
             'metodo_pago', 'nombre_cliente', 'apellido_cliente', 'telefono', 'email', 
@@ -880,116 +797,99 @@ exports.createOrder = async (req, res) => {
         if (tipo_cliente === 'invitado' && id_usuario_invitado) {
             orderInsertFields.push('id_usuario_invitado');
             orderInsertValues.push(id_usuario_invitado);
+            console.log(`📝 [ORDEN] Incluyendo ID de usuario invitado: ${id_usuario_invitado}`);
         }
 
         const placeholders = orderInsertFields.map(() => '?').join(', ');
         const orderQuery = `INSERT INTO pedidos (${orderInsertFields.join(', ')}) VALUES (${placeholders})`;
 
+        console.log('🔧 [ORDEN] Query de inserción:', orderQuery);
+        console.log('🔧 [ORDEN] Valores a insertar:', orderInsertValues);
+
         const [orderResult] = await connection.query(orderQuery, orderInsertValues);
 
         const id_pedido = orderResult.insertId;
-        console.log(`Pedido creado con ID: ${id_pedido}, Código: ${codigo_pedido}`);
+        console.log(`✅ [ORDEN] Pedido creado con ID: ${id_pedido}, Código: ${codigo_pedido}`);
         
         // Array para almacenar los detalles insertados correctamente
         const detallesInsertados = [];
         const erroresDetalles = [];
 
         // Add order details
-        for (const producto of productos) {
+        console.log('🛒 [DETALLES] Iniciando inserción de detalles de productos');
+        for (const [index, producto] of productos.entries()) {
+            console.log(`🔍 [DETALLES] Procesando producto ${index + 1}/${productos.length}:`, producto);
+            
             try {
-                // Generar un ID seguro para la base de datos si viene uno del frontend
-                const id_producto_original = producto.id_producto ? generateProductId(producto.id_producto) : null;
-                
-                // Primero buscamos si el producto existe
-                let id_producto_a_usar = null;
-                
-                // Buscamos primero por título del producto para mayor precisión
-                const [productosByName] = await connection.query(
-                    'SELECT id_producto FROM productos WHERE titulo = ?',
-                    [producto.nombre_producto]
+                // Check if product exists in database
+                const [existingProducts] = await connection.query(
+                    'SELECT id_producto, titulo, precio FROM productos WHERE titulo = ? OR id_producto = ?',
+                    [producto.nombre, producto.id_producto || 0]
                 );
                 
-                if (productosByName.length > 0) {
-                    // Si encontramos el producto por nombre, usamos ese ID
-                    id_producto_a_usar = productosByName[0].id_producto;
-                    console.log(`Producto encontrado por título: ${producto.nombre_producto}, ID: ${id_producto_a_usar}`);
-                } else if (id_producto_original) {
-                    // Si no encontramos por nombre pero tenemos un ID original, verificamos si existe
-                    const [productsById] = await connection.query(
-                        'SELECT id_producto FROM productos WHERE id_producto = ?',
-                        [id_producto_original]
-                    );
-                    
-                    if (productsById.length > 0) {
-                        id_producto_a_usar = id_producto_original;
-                        console.log(`Producto encontrado por ID: ${id_producto_a_usar}`);
-                    }
-                }
-                  if (!id_producto_a_usar) {
-                    // El producto no existe en la base de datos.
-                    console.log(`Error: El producto "${producto.nombre_producto}" no existe en la base de datos.`);
-                    
-                    // No creamos productos automáticamente, retornamos error
+                let id_producto;
+                let precio_unitario = parseFloat(producto.precio);
+                
+                if (existingProducts.length > 0) {
+                    id_producto = existingProducts[0].id_producto;
+                    console.log(`✅ [DETALLES] Producto existente encontrado con ID: ${id_producto}`);
+                } else {
+                    console.log(`⚠️ [DETALLES] Producto "${producto.nombre}" no encontrado en base de datos, saltando...`);
                     erroresDetalles.push({
-                        producto: producto.nombre_producto,
+                        producto: producto.nombre,
                         error: 'Producto no encontrado en la base de datos'
                     });
-                    
-                    continue; // Saltamos al siguiente producto
+                    continue;
                 }
                 
-                // Calculamos el subtotal si no viene
-                const subtotalProducto = producto.subtotal || (producto.cantidad * producto.precio_unitario);
+                const cantidad = parseInt(producto.cantidad);
+                const subtotal_producto = precio_unitario * cantidad;
                 
-                // Insertamos el detalle del pedido con el ID de producto adecuado
-                const detalleSql = `INSERT INTO detalle_pedidos (
-                    id_pedido, id_producto, nombre_producto, cantidad, precio_unitario,
-                    masa, tamano, instrucciones_especiales, subtotal, metodo_entrega
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                console.log(`💰 [DETALLES] Calculando: ${precio_unitario} x ${cantidad} = ${subtotal_producto}`);
                 
-                const detalleParams = [
-                    id_pedido, id_producto_a_usar, producto.nombre_producto,
-                    producto.cantidad, producto.precio_unitario, producto.masa || null,
-                    producto.tamano || null, producto.instrucciones_especiales || null,
-                    subtotalProducto, producto.metodo_entrega !== undefined ? producto.metodo_entrega : 0
-                ];
+                // Insert order detail
+                const [detalleResult] = await connection.query(
+                    'INSERT INTO detalle_pedidos (id_pedido, id_producto, cantidad, precio_unitario, subtotal, nombre_producto, tamano, ingredientes_extra, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [
+                        id_pedido,
+                        id_producto,
+                        cantidad,
+                        precio_unitario,
+                        subtotal_producto,
+                        producto.nombre,
+                        producto.tamano || null,
+                        producto.ingredientes_extra ? JSON.stringify(producto.ingredientes_extra) : null,
+                        producto.observaciones || null
+                    ]
+                );
                 
-                console.log(`Insertando detalle: ${JSON.stringify({
-                    sql: detalleSql,
-                    params: detalleParams
-                })}`);
+                const detalleInsertado = {
+                    id_detalle: detalleResult.insertId,
+                    id_producto: id_producto,
+                    nombre_producto: producto.nombre,
+                    cantidad: cantidad,
+                    precio_unitario: precio_unitario,
+                    subtotal: subtotal_producto
+                };
                 
-                const [detailResult] = await connection.query(detalleSql, detalleParams);
+                detallesInsertados.push(detalleInsertado);
+                console.log(`✅ [DETALLES] Detalle insertado correctamente:`, detalleInsertado);
                 
-                // Guardamos el ID del detalle insertado
-                detallesInsertados.push({
-                    id_detalle: detailResult.insertId,
-                    nombre_producto: producto.nombre_producto,
-                    cantidad: producto.cantidad,
-                    precio_unitario: producto.precio_unitario,
-                    subtotal: subtotalProducto,
-                    metodo_entrega: producto.metodo_entrega !== undefined ? producto.metodo_entrega : 0
-                });
-                
-                console.log(`Detalle de pedido insertado con ID: ${detailResult.insertId}`);
-            } catch (detailError) {
-                console.error(`Error al procesar detalle del pedido para producto ${producto.nombre_producto}:`, detailError);
-                console.error('Datos del producto con error:', JSON.stringify(producto));
-                
-                // Añadir a la lista de errores
+            } catch (error) {
+                console.error(`❌ [DETALLES] Error al insertar producto "${producto.nombre}":`, error.message);
                 erroresDetalles.push({
-                    producto: producto.nombre_producto,
-                    error: detailError.message
+                    producto: producto.nombre,
+                    error: error.message
                 });
             }
         }
         
         // Verificar si hay algún detalle insertado
         if (detallesInsertados.length === 0) {
-            // Si no se pudo insertar ningún detalle, hacemos rollback y devolvemos error
+            console.error('❌ [DETALLES] No se pudo insertar ningún detalle de producto');
             await connection.rollback();
-            return res.status(500).json({ 
-                message: 'No se pudo crear ningún detalle del pedido',
+            return res.status(400).json({
+                message: 'No se pudo procesar ningún producto del pedido',
                 errores: erroresDetalles
             });
         }
@@ -1000,10 +900,16 @@ exports.createOrder = async (req, res) => {
             [id_pedido]
         );
         
-        console.log(`Detalles verificados: ${verificacionDetalles[0].count} de ${productos.length} productos`);
+        console.log(`🔍 [VERIFICACION] Detalles verificados: ${verificacionDetalles[0].count} de ${productos.length} productos`);
         
         // Commit the transaction
         await connection.commit();
+        console.log('✅ [DB] Transacción confirmada exitosamente');
+
+        console.log('🎉 [ORDEN] Pedido creado exitosamente');
+        console.log(`📊 [RESUMEN] ID Pedido: ${id_pedido}, Código: ${codigo_pedido}`);
+        console.log(`📊 [RESUMEN] Productos procesados: ${detallesInsertados.length}/${productos.length}`);
+        console.log(`📊 [RESUMEN] Total: $${total}`);
 
         // Send success response
         res.status(201).json({
@@ -1019,13 +925,16 @@ exports.createOrder = async (req, res) => {
     } catch (error) {
         // Rollback transaction in case of error
         if (connection) {
+            console.error('💥 [DB] Error detectado, realizando rollback');
             await connection.rollback();
         }
-        console.error('Error al crear el pedido:', error);
+        console.error('❌ [ORDEN] Error al crear el pedido:', error);
+        console.error('❌ [ORDEN] Stack trace:', error.stack);
         res.status(500).json({ message: 'Error al procesar el pedido', error: error.message });
     } finally {
         if (connection) {
             connection.release();
+            console.log('🔌 [DB] Conexión liberada');
         }
     }
 };
