@@ -1326,10 +1326,19 @@ exports.changePasswordAdmin = async (req, res) => {
 // Admin Login with JWT
 exports.loginAdmin = async (req, res) => {
     try {
+        console.log('🔍 === INICIO LOGIN ADMIN ===');
+        console.log('📧 Request body recibido:', { 
+            correo: req.body.correo, 
+            contrasena: req.body.contrasena ? '***' + req.body.contrasena.slice(-3) : 'undefined'
+        });
+        
         const { correo, contrasena } = req.body;
         
         // Validate input
         if (!correo || !contrasena) {
+            console.log('❌ Validación fallida: campos faltantes');
+            console.log('   correo:', correo);
+            console.log('   contrasena:', contrasena ? 'presente' : 'ausente');
             return res.status(400).json({
                 success: false,
                 message: 'Correo electrónico y contraseña son requeridos',
@@ -1337,20 +1346,27 @@ exports.loginAdmin = async (req, res) => {
             });
         }
         
+        console.log('✅ Campos presentes - correo:', correo);
+        
         // Validate email format
         if (!validateEmail(correo)) {
+            console.log('❌ Formato de email inválido:', correo);
             return res.status(400).json({
                 success: false,
                 message: 'Formato de correo electrónico inválido'
             });
         }
-          // Find admin by email
+        
+        console.log('✅ Formato de email válido');
+        console.log('🔍 Buscando administrador en BD...');
+        
+        // Find admin by email
         pool.query(
             'SELECT id_admin, nombre, correo, contrasena, ultimo_acceso FROM administradores WHERE correo = ?',
             [correo],
             async (err, adminResults) => {
                 if (err) {
-                    console.error('Error al buscar administrador:', err);
+                    console.error('❌ Error en query BD:', err);
                     return res.status(500).json({
                         success: false,
                         message: 'Error interno del servidor',
@@ -1358,38 +1374,64 @@ exports.loginAdmin = async (req, res) => {
                     });
                 }
                 
+                console.log('📊 Resultados de BD:');
+                console.log('   - Número de resultados:', adminResults.length);
+                
                 if (adminResults.length === 0) {
+                    console.log('❌ No se encontró administrador con correo:', correo);
+                    console.log('💡 Verifica que el correo existe en la tabla administradores');
                     return res.status(401).json({
                         success: false,
                         message: 'Credenciales inválidas',
                         error_type: 'INVALID_CREDENTIALS'
                     });
                 }
-                  const admin = adminResults[0];
+                
+                const admin = adminResults[0];
+                console.log('✅ Administrador encontrado:');
+                console.log('   - ID:', admin.id_admin);
+                console.log('   - Nombre:', admin.nombre);
+                console.log('   - Correo:', admin.correo);
+                console.log('   - Contraseña hash (primeros 10 chars):', admin.contrasena ? admin.contrasena.substring(0, 10) + '...' : 'null');
+                console.log('   - Último acceso:', admin.ultimo_acceso);
                 
                 // Admin found, proceed with password verification
                 try {
+                    console.log('🔐 Iniciando verificación de contraseña...');
+                    console.log('   - Contraseña enviada (longitud):', contrasena.length);
+                    console.log('   - Hash en BD (longitud):', admin.contrasena ? admin.contrasena.length : 'null');
+                    
                     // Verify password
                     const isPasswordValid = await bcrypt.compare(contrasena, admin.contrasena);
                     
+                    console.log('🔐 Resultado verificación contraseña:', isPasswordValid ? '✅ VÁLIDA' : '❌ INVÁLIDA');
+                    
                     if (!isPasswordValid) {
+                        console.log('❌ Contraseña incorrecta para:', correo);
+                        console.log('💡 Verifica que la contraseña esté correcta');
+                        console.log('💡 Asegúrate de que la contraseña en BD esté hasheada con bcrypt');
                         return res.status(401).json({
                             success: false,
                             message: 'Credenciales inválidas',
                             error_type: 'INVALID_CREDENTIALS'
-                        });
-                    }
+                        });                    }
+                    
+                    console.log('✅ Contraseña válida! Generando token JWT...');
                     
                     // Generate JWT token
                     const accessToken = generateJWTToken(admin.id_admin, admin.correo, admin.nombre);
+                    console.log('🎟️ Token JWT generado (primeros 20 chars):', accessToken.substring(0, 20) + '...');
                     
                     // Update last access
+                    console.log('📝 Actualizando último acceso...');
                     pool.query(
                         'UPDATE administradores SET ultimo_acceso = CURRENT_TIMESTAMP WHERE id_admin = ?',
                         [admin.id_admin],
                         (updateErr) => {
                             if (updateErr) {
-                                console.error('Error al actualizar último acceso:', updateErr);
+                                console.error('❌ Error al actualizar último acceso:', updateErr);
+                            } else {
+                                console.log('✅ Último acceso actualizado');
                             }
                         }
                     );
@@ -1404,11 +1446,13 @@ exports.loginAdmin = async (req, res) => {
                                 console.error('Error al registrar login en logs:', logErr);
                             }
                         }
-                    );
+                    );                    
+                    console.log('📊 Registrando login en logs...');
                     
-                    console.log(`✅ Admin login exitoso: ${admin.correo} - ${new Date().toISOString()}`);
+                    console.log(`🎉 Admin login exitoso: ${admin.correo} - ${new Date().toISOString()}`);
                     
                     // Send success response
+                    console.log('📤 Enviando respuesta exitosa...');
                     res.status(200).json({
                         success: true,
                         message: 'Autenticación exitosa',
@@ -1424,19 +1468,21 @@ exports.loginAdmin = async (req, res) => {
                         timestamp: new Date().toISOString()
                     });
                     
+                    console.log('🔍 === FIN LOGIN ADMIN EXITOSO ===');
+                    
                 } catch (bcryptError) {
-                    console.error('Error en verificación de contraseña:', bcryptError);
+                    console.error('❌ Error crítico en verificación de contraseña:', bcryptError);
                     return res.status(500).json({
                         success: false,
                         message: 'Error en la verificación de credenciales',
                         error: bcryptError.message
                     });
                 }
-            }
-        );
+            }        );
         
     } catch (error) {
-        console.error('Error en loginAdmin:', error);
+        console.error('❌ Error crítico en loginAdmin:', error);
+        console.log('🔍 === FIN LOGIN ADMIN CON ERROR ===');
         res.status(500).json({
             success: false,
             message: 'Error interno del servidor',
