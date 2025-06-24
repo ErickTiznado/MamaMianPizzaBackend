@@ -919,12 +919,26 @@ exports.resetPasswordAdmin = async (req, res) => {
                 message: 'Token no válido para restablecimiento de contraseña'
             });
         }
+          const adminId = decoded.id;
         
-        const adminId = decoded.id;
+        console.log('🔧 === RESET PASSWORD ADMIN DEBUG ===');
+        console.log('   - Admin ID:', adminId);
+        console.log('   - Nueva contraseña (longitud):', nuevaContrasena.length);
+        console.log('   - Nueva contraseña (primeros 3):', nuevaContrasena.substring(0, 3) + '...');
         
         // Hash new password
         const saltRounds = 12; // Increased security for admins
+        console.log('   - Salt rounds:', saltRounds);
         const hashedPassword = await bcrypt.hash(nuevaContrasena, saltRounds);
+        console.log('   - Hash generado (longitud):', hashedPassword.length);
+        console.log('   - Hash generado (primeros 20):', hashedPassword.substring(0, 20) + '...');
+        console.log('   - Tipo de hash:', hashedPassword.substring(0, 4));
+        
+        // Verificar que el hash se genera correctamente
+        const testVerification = await bcrypt.compare(nuevaContrasena, hashedPassword);
+        console.log('   - Test de verificación inmediata:', testVerification ? '✅' : '❌');
+        
+        console.log('📝 Actualizando contraseña en BD...');
         
         // Update admin password
         pool.query(
@@ -938,12 +952,35 @@ exports.resetPasswordAdmin = async (req, res) => {
                         error: updateErr.message
                     });
                 }
-                
-                if (updateResults.affectedRows === 0) {
+                  if (updateResults.affectedRows === 0) {
+                    console.log('❌ No se encontró administrador para actualizar');
                     return res.status(404).json({
                         message: 'Administrador no encontrado'
                     });
                 }
+                
+                console.log('✅ Contraseña actualizada en BD exitosamente');
+                console.log('   - Filas afectadas:', updateResults.affectedRows);
+                
+                // Verificar que se guardó correctamente
+                pool.query(
+                    'SELECT contrasena FROM administradores WHERE id_admin = ?',
+                    [adminId],
+                    async (selectErr, selectResults) => {
+                        if (!selectErr && selectResults.length > 0) {
+                            const savedHash = selectResults[0].contrasena;
+                            console.log('🔍 Hash guardado en BD (primeros 20):', savedHash.substring(0, 20) + '...');
+                            
+                            // Verificar que funciona
+                            const finalTest = await bcrypt.compare(nuevaContrasena, savedHash);
+                            console.log('🧪 Test final con hash guardado:', finalTest ? '✅' : '❌');
+                            
+                            if (!finalTest) {
+                                console.log('⚠️ PROBLEMA: El hash guardado no funciona con la contraseña!');
+                            }
+                        }
+                    }
+                );
                 
                 // Delete/invalidate all password reset codes for this admin
                 pool.query(
@@ -1394,22 +1431,55 @@ exports.loginAdmin = async (req, res) => {
                 console.log('   - Correo:', admin.correo);
                 console.log('   - Contraseña hash (primeros 10 chars):', admin.contrasena ? admin.contrasena.substring(0, 10) + '...' : 'null');
                 console.log('   - Último acceso:', admin.ultimo_acceso);
-                
-                // Admin found, proceed with password verification
+                  // Admin found, proceed with password verification
                 try {
                     console.log('🔐 Iniciando verificación de contraseña...');
                     console.log('   - Contraseña enviada (longitud):', contrasena.length);
+                    console.log('   - Contraseña enviada (primeros 3):', contrasena.substring(0, 3) + '...');
                     console.log('   - Hash en BD (longitud):', admin.contrasena ? admin.contrasena.length : 'null');
+                    console.log('   - Hash completo en BD:', admin.contrasena);
+                    console.log('   - Tipo de hash:', admin.contrasena ? admin.contrasena.substring(0, 4) : 'null');
+                    
+                    // Verificar si el hash parece válido
+                    const isValidBcryptHash = admin.contrasena && admin.contrasena.startsWith('$2b$');
+                    console.log('   - Hash bcrypt válido:', isValidBcryptHash ? '✅' : '❌');
+                    
+                    if (!isValidBcryptHash) {
+                        console.log('⚠️ ADVERTENCIA: El hash no parece ser de bcrypt!');
+                        console.log('💡 Posible solución: La contraseña debe ser re-hasheada');
+                    }
+                    
+                    // Test manual de hash (para depuración)
+                    console.log('🧪 Generando hash de prueba con la contraseña enviada...');
+                    const testHash = await bcrypt.hash(contrasena, 12);
+                    console.log('   - Hash de prueba generado:', testHash.substring(0, 20) + '...');
                     
                     // Verify password
+                    console.log('🔍 Ejecutando bcrypt.compare...');
                     const isPasswordValid = await bcrypt.compare(contrasena, admin.contrasena);
-                    
-                    console.log('🔐 Resultado verificación contraseña:', isPasswordValid ? '✅ VÁLIDA' : '❌ INVÁLIDA');
+                      console.log('🔐 Resultado verificación contraseña:', isPasswordValid ? '✅ VÁLIDA' : '❌ INVÁLIDA');
                     
                     if (!isPasswordValid) {
                         console.log('❌ Contraseña incorrecta para:', correo);
                         console.log('💡 Verifica que la contraseña esté correcta');
                         console.log('💡 Asegúrate de que la contraseña en BD esté hasheada con bcrypt');
+                        
+                        // Test adicional: comparar con hash generado en el momento
+                        console.log('🧪 Test adicional: ¿funciona con hash recién generado?');
+                        const testResult = await bcrypt.compare(contrasena, testHash);
+                        console.log('   - Resultado con hash nuevo:', testResult ? '✅' : '❌');
+                        
+                        // Mostrar información para solución manual
+                        console.log('');
+                        console.log('🔧 === INFORMACIÓN PARA SOLUCIÓN ===');
+                        console.log('Para actualizar la contraseña correctamente:');
+                        console.log('1. Contraseña actual:', contrasena);
+                        console.log('2. Hash correcto sería:', testHash);
+                        console.log('3. Query para actualizar:');
+                        console.log(`   UPDATE administradores SET contrasena = '${testHash}' WHERE id_admin = ${admin.id_admin};`);
+                        console.log('=======================================');
+                        console.log('');
+                        
                         return res.status(401).json({
                             success: false,
                             message: 'Credenciales inválidas',
@@ -1752,5 +1822,89 @@ exports.logoutAdmin = async (req, res) => {
             message: 'Error interno del servidor',
             error: error.message
         });
+    }
+};
+
+// ============================
+// FUNCIÓN DE DIAGNÓSTICO (TEMPORAL)
+// ============================
+
+// Endpoint GET /auth/admin/debug-password/:id para diagnosticar problemas de contraseña
+exports.debugAdminPassword = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { contrasena } = req.query; // Contraseña para probar
+        
+        if (!contrasena) {
+            return res.status(400).json({
+                message: 'Parámetro contrasena requerido en query',
+                ejemplo: '/auth/admin/debug-password/1?contrasena=miPassword'
+            });
+        }
+        
+        console.log('🔍 === DEBUG PASSWORD ADMIN ===');
+        console.log('   - Admin ID:', id);
+        console.log('   - Contraseña a probar:', contrasena);
+        
+        // Obtener admin actual
+        pool.query(
+            'SELECT id_admin, nombre, correo, contrasena FROM administradores WHERE id_admin = ?',
+            [id],
+            async (err, results) => {
+                if (err) {
+                    console.error('Error en query:', err);
+                    return res.status(500).json({ error: err.message });
+                }
+                
+                if (results.length === 0) {
+                    return res.status(404).json({ message: 'Admin no encontrado' });
+                }
+                
+                const admin = results[0];
+                console.log('👤 Admin encontrado:', admin.nombre);
+                console.log('📧 Email:', admin.correo);
+                console.log('🔐 Hash actual:', admin.contrasena);
+                console.log('📏 Longitud hash:', admin.contrasena.length);
+                console.log('🔖 Tipo hash:', admin.contrasena.substring(0, 4));
+                
+                // Generar nuevo hash para comparar
+                const newHash = await bcrypt.hash(contrasena, 12);
+                console.log('🆕 Nuevo hash generado:', newHash);
+                
+                // Probar con hash actual
+                const currentTest = await bcrypt.compare(contrasena, admin.contrasena);
+                console.log('🧪 Test con hash actual:', currentTest ? '✅ FUNCIONA' : '❌ FALLA');
+                
+                // Probar con nuevo hash
+                const newTest = await bcrypt.compare(contrasena, newHash);
+                console.log('🧪 Test con hash nuevo:', newTest ? '✅ FUNCIONA' : '❌ FALLA');
+                
+                res.json({
+                    admin: {
+                        id: admin.id_admin,
+                        nombre: admin.nombre,
+                        correo: admin.correo
+                    },
+                    hash_info: {
+                        current_hash: admin.contrasena,
+                        hash_length: admin.contrasena.length,
+                        hash_type: admin.contrasena.substring(0, 4),
+                        new_hash_generated: newHash
+                    },
+                    tests: {
+                        current_hash_works: currentTest,
+                        new_hash_works: newTest
+                    },
+                    suggested_fix: currentTest ? null : {
+                        message: 'El hash actual no funciona, usar este query:',
+                        query: `UPDATE administradores SET contrasena = '${newHash}' WHERE id_admin = ${id};`
+                    }
+                });
+            }
+        );
+        
+    } catch (error) {
+        console.error('Error en debugAdminPassword:', error);
+        res.status(500).json({ error: error.message });
     }
 };
