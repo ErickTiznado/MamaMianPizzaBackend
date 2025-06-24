@@ -18,6 +18,7 @@ const resenasRoutes = require('./routes/resenasRoutes');
 const experienciaRoutes = require('./routes/experienciaRoutes');
 const authRoutes = require('./routes/authRoutes');
 const categoriasRoutes = require('./routes/categoriasRoutes');
+const accountRoutes = require('./routes/accountRoutes'); // Import account routes
 const segmentacionRoutes = require('./routes/segmentacionRoutes'); // Import the new route
 const logsRoutes = require('./routes/logsRoutes'); // Import logs routes
 // Initialize express app
@@ -81,6 +82,7 @@ app.use('/api/resenas', resenasRoutes);
 app.use('/api/experiencias', experienciaRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/categorias', categoriasRoutes);
+app.use('/api/account', accountRoutes); // Use account routes
 app.use('/api/segmentacion', segmentacionRoutes); // Use the new route for customer segmentation
 app.use('/api/logs', logsRoutes); // Use logs routes
 // Default route
