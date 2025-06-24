@@ -1344,10 +1344,9 @@ exports.loginAdmin = async (req, res) => {
                 message: 'Formato de correo electrónico inválido'
             });
         }
-        
-        // Find admin by email
+          // Find admin by email
         pool.query(
-            'SELECT id_admin, nombre, correo, contrasena, activo, ultimo_acceso FROM administradores WHERE correo = ?',
+            'SELECT id_admin, nombre, correo, contrasena, ultimo_acceso FROM administradores WHERE correo = ?',
             [correo],
             async (err, adminResults) => {
                 if (err) {
@@ -1366,18 +1365,9 @@ exports.loginAdmin = async (req, res) => {
                         error_type: 'INVALID_CREDENTIALS'
                     });
                 }
+                  const admin = adminResults[0];
                 
-                const admin = adminResults[0];
-                
-                // Check if admin account is active
-                if (!admin.activo) {
-                    return res.status(403).json({
-                        success: false,
-                        message: 'Cuenta de administrador desactivada',
-                        error_type: 'ACCOUNT_DISABLED'
-                    });
-                }
-                
+                // Admin found, proceed with password verification
                 try {
                     // Verify password
                     const isPasswordValid = await bcrypt.compare(contrasena, admin.contrasena);
@@ -1497,10 +1487,9 @@ exports.refreshAdminToken = async (req, res) => {
                 });
             }
         }
-        
-        // Verify admin still exists and is active
+          // Verify admin still exists
         pool.query(
-            'SELECT id_admin, nombre, correo, activo FROM administradores WHERE id_admin = ?',
+            'SELECT id_admin, nombre, correo FROM administradores WHERE id_admin = ?',
             [adminId],
             (err, adminResults) => {
                 if (err) {
@@ -1519,16 +1508,7 @@ exports.refreshAdminToken = async (req, res) => {
                         error_type: 'ADMIN_NOT_FOUND'
                     });
                 }
-                
-                const admin = adminResults[0];
-                
-                if (!admin.activo) {
-                    return res.status(403).json({
-                        success: false,
-                        message: 'Cuenta de administrador desactivada',
-                        error_type: 'ACCOUNT_DISABLED'
-                    });
-                }
+                  const admin = adminResults[0];
                 
                 // Generate new token
                 const newAccessToken = generateJWTToken(admin.id_admin, admin.correo, admin.nombre);
@@ -1643,10 +1623,9 @@ exports.verifyAdminToken = (req, res, next) => {
 exports.getAdminProfile = async (req, res) => {
     try {
         const adminId = req.admin.id;
-        
-        // Get admin details from database
+          // Get admin details from database
         pool.query(
-            'SELECT id_admin, nombre, correo, activo, ultimo_acceso, fecha_creacion FROM administradores WHERE id_admin = ?',
+            'SELECT id_admin, nombre, correo, ultimo_acceso, fecha_creacion FROM administradores WHERE id_admin = ?',
             [adminId],
             (err, adminResults) => {
                 if (err) {
@@ -1670,12 +1649,10 @@ exports.getAdminProfile = async (req, res) => {
                 
                 res.status(200).json({
                     success: true,
-                    message: 'Perfil de administrador obtenido exitosamente',
-                    admin: {
+                    message: 'Perfil de administrador obtenido exitosamente',                    admin: {
                         id: admin.id_admin,
                         nombre: admin.nombre,
                         correo: admin.correo,
-                        activo: admin.activo,
                         ultimo_acceso: admin.ultimo_acceso,
                         fecha_creacion: admin.fecha_creacion
                     },
