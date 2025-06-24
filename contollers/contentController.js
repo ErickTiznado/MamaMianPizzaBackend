@@ -8,6 +8,28 @@ const actualDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 // Server base URL
 const SERVER_BASE_URL = 'https://api.mamamianpizza.com';
 
+// Helper function to extract user ID from request (for future authentication)
+const getUserId = (req) => {
+    // TODO: Implementar cuando se agregue autenticación
+    // return req.user?.id || req.userId || null;
+    return null; // Por ahora devolvemos null hasta implementar auth
+};
+
+// Helper function to log actions to database
+const logAction = (id_usuario, accion, tabla_afectada, descripcion) => {
+    pool.query(
+        'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+        [id_usuario, accion, tabla_afectada, descripcion],
+        (logErr) => {
+            if (logErr) {
+                console.error('Error al registrar en logs:', logErr);
+            } else {
+                console.log(`📝 Log registrado: ${accion} en ${tabla_afectada}`);
+            }
+        }
+    );
+};
+
 // Configure multer for image uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -47,14 +69,14 @@ const getCategoryId = (categoryName, callback) => {
         if (results.length > 0) {
             console.log('Categoría existente:', results[0].id_categoria);
             callback(null, results[0].id_categoria);
-        } else {
-            // If category doesn't exist, create it
-            pool.query('INSERT INTO categorias (nombre) VALUES (?)', [categoryName, actualDate], (err, result) => {
+        } else {            // If category doesn't exist, create it
+            pool.query('INSERT INTO categorias (nombre) VALUES (?)', [categoryName], (err, result) => {
                 if (err) {
-                    
                     callback(err, null);
                     return;
-                }
+                }                // Log new category creation (getCategoryId doesn't have access to req)
+                const descripcionLog = `Nueva categoría creada: "${categoryName}" (ID: ${result.insertId})`;
+                logAction(null, 'CREATE', 'categorias', descripcionLog);
                 callback(null, result.insertId);
             });
         }
@@ -95,10 +117,11 @@ exports.submitContent = (req, res) => {
         `INSERT INTO productos
            (titulo, descripcion, seccion, id_categoria, activo, imagen, fecha_creacion, fecha_actualizacion)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actualDate, actualDate],
-        (err, result) => {
+        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actualDate, actualDate],        (err, result) => {
           if (err) {
-            console.error(err);
+            console.error(err);            // Log product creation error
+            const descripcionLog = `Error al crear producto: "${titulo}" - ${err.message}`;
+            logAction(getUserId(req), 'CREATE_ERROR', 'productos', descripcionLog);
             return res.status(500).json({ message: 'Error al crear el producto' });
           }
           const pizzaId = result.insertId;
@@ -111,14 +134,17 @@ exports.submitContent = (req, res) => {
             pool.query(
               `INSERT INTO precios (pizza_id, tamano_id, precio) VALUES (?, ?, ?)`,
               [pizzaId, tamanoId, parseFloat(precio)],
-              err => {
-                if (err && !fallo) {
+              err => {                if (err && !fallo) {
                   fallo = true;
-                  console.error('Error al insertar precio', err);
+                  console.error('Error al insertar precio', err);                  // Log price insertion error during creation
+                  const descripcionLog = `Error al guardar precios del producto: "${titulo}" (ID: ${pizzaId}) - ${err.message}`;
+                  logAction(getUserId(req), 'CREATE_ERROR', 'precios', descripcionLog);
                   return res.status(500).json({ message: 'Error al guardar precios' });
-                }
-                pendientes--;
-                if (pendientes === 0 && !fallo) {
+                }pendientes--;
+                if (pendientes === 0 && !fallo) {                  // Log successful product creation
+                  const descripcionLog = `Producto creado: "${titulo}" (ID: ${pizzaId}) en categoría "${categoria}" con ${entries.length} precios configurados`;
+                  logAction(getUserId(req), 'CREATE', 'productos', descripcionLog);
+                  
                   res.status(201).json({
                     message: 'Producto y precios creados exitosamente',
                     id_producto: pizzaId
@@ -126,10 +152,11 @@ exports.submitContent = (req, res) => {
                 }
               }
             );
-          });
-
-          // Si no hay tamaños (no debería pasar), devolvemos ya:
-          if (entries.length === 0) {
+          });          // Si no hay tamaños (no debería pasar), devolvemos ya:
+          if (entries.length === 0) {            // Log product creation without prices
+            const descripcionLog = `Producto creado sin precios: "${titulo}" (ID: ${pizzaId}) en categoría "${categoria}"`;
+            logAction(getUserId(req), 'CREATE', 'productos', descripcionLog);
+            
             res.status(201).json({
               message: 'Producto creado sin precios (ajusta tu formulario)',
               id_producto: pizzaId
@@ -145,9 +172,15 @@ exports.submitContent = (req, res) => {
 exports.getLasMasPopulares = (req, res) => {
     pool.query('SELECT * FROM productos WHERE seccion = "Las más populares" ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {
         if(err){
-            console.error('Error al obtener productos', err);
+            console.error('Error al obtener productos', err);            // Log error when getting popular products
+            const descripcionLog = `Error al consultar productos más populares - ${err.message}`;
+            logAction(getUserId(req), 'READ_ERROR', 'productos', descripcionLog);
             return res.status(500).json({ message: 'Error al obtener productos' });
         }
+          // Log successful query
+        const descripcionLog = `Productos más populares consultados exitosamente - ${results.length} productos encontrados`;
+        logAction(getUserId(req), 'READ', 'productos', descripcionLog);
+        
         res.status(200).json({ message: 'Productos obtenidos exitosamente', productos: results });
         console.log('Productos obtenidos exitosamente', results);
     })
@@ -157,9 +190,15 @@ exports.getLasMasPopulares = (req, res) => {
 exports.getRecomendacionDeLacasa = (req, res) => {
     pool.query('SELECT * FROM productos where seccion = "Recomendación de la casa" ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {
         if(err){
-            console.error('Error al obtener productos', err);
+            console.error('Error al obtener productos', err);            // Log error when getting house recommendations
+            const descripcionLog = `Error al consultar recomendaciones de la casa - ${err.message}`;
+            logAction(getUserId(req), 'READ_ERROR', 'productos', descripcionLog);
             return res.status(500).json({ message: 'Error al obtener productos' });
         }
+          // Log successful query
+        const descripcionLog = `Recomendaciones de la casa consultadas exitosamente - ${results.length} productos encontrados`;
+        logAction(getUserId(req), 'READ', 'productos', descripcionLog);
+        
         res.status(200).json({message: 'Productos obtenidos exitosamente', productos: results });            
     })
     }
@@ -172,6 +211,8 @@ exports.getMenu = (req, res) => {
       p.descripcion,
       p.imagen,
       p.activo,
+      c.nombre    AS categoria,
+      c.descripcion AS categoria_descripcion,
       t.id_tamano,
       t.nombre    AS tamano,
       t.indice    AS orden_tamano,
@@ -179,13 +220,19 @@ exports.getMenu = (req, res) => {
     FROM productos p
     JOIN precios pr ON p.id_producto = pr.pizza_id
     JOIN tamanos t  ON pr.tamano_id   = t.id_tamano
+    JOIN categorias c ON p.id_categoria = c.id_categoria
     ORDER BY p.id_producto, t.indice;
-  `;
-  pool.query(sql, (err, rows) => {
+  `;  pool.query(sql, (err, rows) => {
     if (err) {
-      console.error(err);
+      console.error(err);      // Log menu query error
+      const descripcionLog = `Error al consultar el menú - ${err.message}`;
+      logAction(getUserId(req), 'READ_ERROR', 'productos', descripcionLog);
       return res.status(500).json({ message: 'Error al obtener el menú' });
     }
+      // Log successful menu query
+    const descripcionLog = `Menú consultado exitosamente - ${rows.length} registros encontrados`;
+    logAction(getUserId(req), 'READ', 'productos', descripcionLog);
+    
     // Agrupamos por pizza
     const mapa = {};
     rows.forEach(r => {
@@ -196,7 +243,8 @@ exports.getMenu = (req, res) => {
           descripcion: r.descripcion,
           imagen: r.imagen,
           activo: r.activo,
-
+          categoria: r.categoria,
+          categoria_descripcion: r.categoria_descripcion,
           opciones: []
         };
       }
@@ -220,33 +268,41 @@ exports.getMenu = (req, res) => {
                 console.error('Error al eliminar precios del producto', err);
                 return res.status(500).json({ message: 'Error al eliminar precios del producto' });
             }
-            
-            // Después eliminar el producto
+              // Después eliminar el producto
             pool.query('DELETE FROM productos WHERE id_producto = ?', [id_producto], (err, productResults) => {
                 if(err){
-                    console.error('Error al eliminar el producto', err);
+                    console.error('Error al eliminar el producto', err);                    // Log product deletion error
+                    const descripcionLog = `Error al eliminar producto (ID: ${id_producto}) - ${err.message}`;
+                    logAction(getUserId(req), 'DELETE_ERROR', 'productos', descripcionLog);
                     return res.status(500).json({ message: 'Error al eliminar el producto' });
                 }
-                
-                if(productResults.affectedRows === 0){
+                  if(productResults.affectedRows === 0){
                     return res.status(404).json({ message: 'Producto no encontrado' });
                 }
+                  // Log successful product deletion
+                const descripcionLog = `Producto eliminado (ID: ${id_producto}) junto con ${priceResults.affectedRows} precios asociados`;
+                logAction(getUserId(req), 'DELETE', 'productos', descripcionLog);
                 
                 res.status(200).json({ 
                     message: 'Producto y sus precios eliminados exitosamente',
                     preciosEliminados: priceResults.affectedRows,
-                    productosEliminados: productResults.affectedRows
-                });
+                    productosEliminados: productResults.affectedRows                });
             });
         });
-    }
+    };
 
     exports.TotalProducts = (req, res) => {
         pool.query('SELECT COUNT(*) as total FROM productos', (err, results) => {
             if(err){
-                console.error('Error al obtener el total de productos', err);
+                console.error('Error al obtener el total de productos', err);                // Log error when getting total products
+                const descripcionLog = `Error al consultar total de productos - ${err.message}`;
+                logAction(getUserId(req), 'READ_ERROR', 'productos', descripcionLog);
                 return res.status(500).json({ message: 'Error al obtener el total de productos' });
             }
+              // Log successful query
+            const descripcionLog = `Total de productos consultado exitosamente - ${results[0].total} productos encontrados`;
+            logAction(getUserId(req), 'READ', 'productos', descripcionLog);
+            
             res.status(200).json({ message: 'Total de productos obtenidos exitosamente', total: results[0].total });
         })
     }
@@ -279,10 +335,11 @@ exports.getMenu = (req, res) => {
         `UPDATE productos SET
            titulo = ?, descripcion = ?, seccion = ?, id_categoria = ?, activo = ?, imagen = COALESCE(?, imagen), fecha_actualizacion = ?
          WHERE id_producto = ?`,
-        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actDate, id_producto],
-        err => {
+        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actDate, id_producto],        err => {
           if (err) {
-            console.error(err);
+            console.error(err);            // Log product update error
+            const descripcionLog = `Error al actualizar producto: "${titulo}" (ID: ${id_producto}) - ${err.message}`;
+            logAction(getUserId(req), 'UPDATE_ERROR', 'productos', descripcionLog);
             return res.status(500).json({ message: 'Error al actualizar el producto' });
           }
 
@@ -290,9 +347,10 @@ exports.getMenu = (req, res) => {
           pool.query(
             `DELETE FROM precios WHERE pizza_id = ?`,
             [id_producto],
-            err => {
-              if (err) {
-                console.error(err);
+            err => {              if (err) {
+                console.error(err);                // Log price deletion error during update
+                const descripcionLog = `Error al limpiar precios antiguos del producto (ID: ${id_producto}) - ${err.message}`;
+                logAction(getUserId(req), 'UPDATE_ERROR', 'precios', descripcionLog);
                 return res.status(500).json({ message: 'Error al limpiar precios antiguos' });
               }
 
@@ -304,14 +362,17 @@ exports.getMenu = (req, res) => {
                 pool.query(
                   `INSERT INTO precios (pizza_id, tamano_id, precio) VALUES (?, ?, ?)`,
                   [id_producto, tamanoId, parseFloat(precio)],
-                  err => {
-                    if (err && !fallo) {
+                  err => {                    if (err && !fallo) {
                       fallo = true;
-                      console.error(err);
+                      console.error(err);                      // Log price insertion error during update
+                      const descripcionLog = `Error al guardar nuevos precios del producto (ID: ${id_producto}) - ${err.message}`;
+                      logAction(getUserId(req), 'UPDATE_ERROR', 'precios', descripcionLog);
                       return res.status(500).json({ message: 'Error al guardar nuevos precios' });
-                    }
-                    pendientes--;
-                    if (pendientes === 0 && !fallo) {
+                    }pendientes--;
+                    if (pendientes === 0 && !fallo) {                      // Log successful product update
+                      const descripcionLog = `Producto actualizado: "${titulo}" (ID: ${id_producto}) en categoría "${categoria}" con ${entries.length} precios actualizados`;
+                      logAction(getUserId(req), 'UPDATE', 'productos', descripcionLog);
+                      
                       res.status(200).json({
                         message: 'Producto y precios actualizados exitosamente',
                         id_producto
@@ -319,9 +380,10 @@ exports.getMenu = (req, res) => {
                     }
                   }
                 );
-              });
-
-              if (entries.length === 0) {
+              });              if (entries.length === 0) {                // Log product update without prices
+                const descripcionLog = `Producto actualizado sin precios: "${titulo}" (ID: ${id_producto}) en categoría "${categoria}"`;
+                logAction(getUserId(req), 'UPDATE', 'productos', descripcionLog);
+                
                 res.status(200).json({
                   message: 'Producto actualizado sin precios (verifica tu formulario)',
                   id_producto

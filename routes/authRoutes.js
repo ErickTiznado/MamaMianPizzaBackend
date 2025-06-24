@@ -22,6 +22,20 @@ router.put('/change-password', authController.changePassword);
 // RUTAS PARA ADMINISTRADORES
 // ============================
 
+// ---- AUTENTICACIÓN JWT PARA ADMINISTRADORES ----
+// Admin login with JWT
+router.post('/admin/login', authController.loginAdmin);
+
+// Refresh JWT token for admin
+router.post('/admin/refresh-token', authController.refreshAdminToken);
+
+// Get admin profile (protected route)
+router.get('/admin/profile', authController.verifyAdminToken, authController.getAdminProfile);
+
+// Admin logout
+router.post('/admin/logout', authController.verifyAdminToken, authController.logoutAdmin);
+
+// ---- RESTABLECIMIENTO DE CONTRASEÑA ----
 // Request password reset for admin via email
 router.post('/admin/request-reset', authController.requestPasswordResetAdmin);
 
@@ -33,5 +47,8 @@ router.put('/admin/reset-password', authController.resetPasswordAdmin);
 
 // Change password directly for admin (with current password)
 router.put('/admin/change-password', authController.changePasswordAdmin);
+
+// DEBUG: Diagnóstico de contraseñas (TEMPORAL - remover en producción)
+router.get('/admin/debug-password/:id', authController.debugAdminPassword);
 
 module.exports = router;

@@ -364,7 +364,7 @@ exports.updateUserProfile = async (req, res) => {
         }
 
         const { id } = req.params;
-        const { nombre, correo, telefono } = req.body;
+        const { nombre, correo, telefono, fecha_nacimiento, sexo } = req.body;
         
         if (!id) {
             return res.status(400).json({
@@ -372,7 +372,7 @@ exports.updateUserProfile = async (req, res) => {
             });
         }
         
-        // Check if user exists
+        // Verificar que el usuario existe
         pool.query('SELECT * FROM usuarios WHERE id_usuario = ?', [id], (err, userResults) => {
             if (err) {
                 console.error('Error al verificar usuario:', err);
@@ -455,10 +455,10 @@ exports.updateUserProfile = async (req, res) => {
                 
                 // Handle profile photo upload
                 if (req.file) {
-                    const fotoPerfilPath = `${SERVER_BASE_URL}/uploads/profiles/${req.file.filename}`;
-                    fieldsToUpdate.foto_perfil = fotoPerfilPath;
+                    const urlFoto = `${SERVER_BASE_URL}/uploads/profiles/${req.file.filename}`;
+                    fieldsToUpdate.foto_perfil = urlFoto;
                     updateFields.push('foto_perfil = ?');
-                    updateValues.push(fotoPerfilPath);
+                    updateValues.push(urlFoto);
                 }
                   // Check if there are fields to update
                 if (updateFields.length === 0) {
