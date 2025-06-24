@@ -1117,14 +1117,13 @@ exports.changePassword = async (req, res) => {
                             message: 'La nueva contraseña debe ser diferente a la contraseña actual'
                         });
                     }
-                    
-                    // Hash new password
+                      // Hash new password
                     const saltRounds = 12;
                     const hashedNewPassword = await bcrypt.hash(nuevaContrasena, saltRounds);
                     
                     // Update password in database
                     pool.query(
-                        'UPDATE usuarios SET contrasena = ?, ultimo_acceso = CURRENT_TIMESTAMP WHERE id_usuario = ?',
+                        'UPDATE usuarios SET contrasena = ? WHERE id_usuario = ?',
                         [hashedNewPassword, id_usuario],
                         async (updateErr, updateResults) => {
                             if (updateErr) {
