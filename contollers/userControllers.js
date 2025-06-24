@@ -238,9 +238,7 @@ exports.loginAdmin = (req, res) =>{
 exports.loginClient = (req, res) => {
     const {correo, contrasena} = req.body;    if(!correo || !contrasena){
         return res.status(400).json({message: 'Faltan datos requeridos'})
-    }
-
-    pool.query('SELECT * FROM usuarios WHERE correo = ?', [correo], (err, results) => {
+    }    pool.query('SELECT * FROM usuarios WHERE correo = ?', [correo], (err, results) => {
         if(err){
             console.error('Error al iniciar sesion', err);
             return res.status(500).json({error: 'Error al iniciar sesion'})
@@ -251,6 +249,27 @@ exports.loginClient = (req, res) => {
         }
         
         const user = results[0];
+        
+        // Verificar si la cuenta está activa
+        if(user.activo === 0){
+            // Log intento de login con cuenta inactiva
+            const descripcionLogInactive = `Intento de inicio de sesión con cuenta inactiva: ${user.nombre} (${user.correo})`;
+            pool.query(
+                'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+                [user.id_usuario, 'LOGIN_INACTIVE_ACCOUNT', 'usuarios', descripcionLogInactive],
+                (logErr) => {
+                    if (logErr) {
+                        console.error('Error al registrar intento de login con cuenta inactiva en logs:', logErr);
+                    }
+                }
+            );
+            
+            return res.status(403).json({
+                success: false,
+                message: 'Su cuenta ha sido desactivada. Contacte al administrador para más información.',
+                code: 'ACCOUNT_INACTIVE'
+            });        }
+        
         bcrypt.compare(contrasena, user.contrasena, (err, isMatch) => {
             if(err){
                 console.log('Error al comparar contraseñas', err);
@@ -310,15 +329,31 @@ exports.createClient = (req, res) => {
     const { nombre, correo, contrasena, celular, fecha_nacimiento, sexo, dui } = req.body;
     if(!nombre || !correo || !contrasena || !celular || !fecha_nacimiento || !sexo || !dui){
         return res.status(400).json({message: 'Faltan datos requeridos'})
-    }
-
-    const haShedPass = bcrypt.hashSync(contrasena, 10);
-    pool.query('INSERT INTO usuarios (nombre, correo, contrasena, celular, fecha_nacimiento, sexo, dui) VALUES (?, ?, ?, ?, ?, ?, ?)', [nombre, correo, haShedPass, celular, fecha_nacimiento, sexo, dui] , (err, results ) => {
+    }    const haShedPass = bcrypt.hashSync(contrasena, 10);
+    pool.query('INSERT INTO usuarios (nombre, correo, contrasena, celular, fecha_nacimiento, sexo, dui, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [nombre, correo, haShedPass, celular, fecha_nacimiento, sexo, dui, 1] , (err, results ) => {
         if(err){
             console.error('Error al crear usuario', err);
             return res.status(500).json({error: 'Error al crear usuario'})
         }
-        res.status(201).json({message: 'Usuario creado exitosamente', id_usuario: results.insertId})
+        
+        // Log del nuevo usuario creado
+        const descripcionLog = `Nuevo usuario registrado: ${nombre} (${correo})`;
+        pool.query(
+            'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+            [results.insertId, 'USER_CREATED', 'usuarios', descripcionLog],
+            (logErr) => {
+                if (logErr) {
+                    console.error('Error al registrar creación de usuario en logs:', logErr);
+                }
+            }
+        );
+        
+        res.status(201).json({
+            success: true,
+            message: 'Usuario creado exitosamente',
+            id_usuario: results.insertId,
+            activo: true
+        })
     } )
 }catch(error){
     console.error('Error en el servidor', error);

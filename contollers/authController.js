@@ -1825,85 +1825,262 @@ exports.logoutAdmin = async (req, res) => {
 };
 
 // ============================
-// FUNCIÓN DE DIAGNÓSTICO (TEMPORAL)
+// GESTIÓN DE ESTADO ACTIVO DE USUARIOS
 // ============================
 
-// Endpoint GET /auth/admin/debug-password/:id para diagnosticar problemas de contraseña
-exports.debugAdminPassword = async (req, res) => {
+// Función para activar/desactivar usuario (solo admins)
+exports.toggleUserActiveStatus = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { contrasena } = req.query; // Contraseña para probar
+        const { id_usuario, activo } = req.body;
+        const adminId = req.admin.id; // Viene del middleware de verificación JWT
+        const adminNombre = req.admin.nombre;
         
-        if (!contrasena) {
+        // Validar entrada
+        if (!id_usuario || activo === undefined) {
             return res.status(400).json({
-                message: 'Parámetro contrasena requerido en query',
-                ejemplo: '/auth/admin/debug-password/1?contrasena=miPassword'
+                success: false,
+                message: 'ID de usuario y estado activo son requeridos'
             });
         }
         
-        console.log('🔍 === DEBUG PASSWORD ADMIN ===');
-        console.log('   - Admin ID:', id);
-        console.log('   - Contraseña a probar:', contrasena);
+        // Validar que activo sea booleano (0 o 1)
+        if (![0, 1, true, false].includes(activo)) {
+            return res.status(400).json({
+                success: false,
+                message: 'El estado activo debe ser 0 (inactivo) o 1 (activo)'
+            });
+        }
         
-        // Obtener admin actual
+        // Convertir a número para la base de datos
+        const activoValue = activo === true || activo === 1 ? 1 : 0;
+        
+        console.log('🔧 === TOGGLE USER ACTIVE STATUS ===');
+        console.log('   - Admin ID:', adminId);
+        console.log('   - Admin Nombre:', adminNombre);
+        console.log('   - Usuario ID:', id_usuario);
+        console.log('   - Nuevo estado activo:', activoValue);
+        
+        // Verificar que el usuario existe
         pool.query(
-            'SELECT id_admin, nombre, correo, contrasena FROM administradores WHERE id_admin = ?',
-            [id],
-            async (err, results) => {
+            'SELECT id_usuario, nombre, correo, activo FROM usuarios WHERE id_usuario = ?',
+            [id_usuario],
+            (err, userResults) => {
                 if (err) {
-                    console.error('Error en query:', err);
-                    return res.status(500).json({ error: err.message });
+                    console.error('Error al buscar usuario:', err);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Error interno del servidor',
+                        error: err.message
+                    });
                 }
                 
-                if (results.length === 0) {
-                    return res.status(404).json({ message: 'Admin no encontrado' });
+                if (userResults.length === 0) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'Usuario no encontrado'
+                    });
                 }
                 
-                const admin = results[0];
-                console.log('👤 Admin encontrado:', admin.nombre);
-                console.log('📧 Email:', admin.correo);
-                console.log('🔐 Hash actual:', admin.contrasena);
-                console.log('📏 Longitud hash:', admin.contrasena.length);
-                console.log('🔖 Tipo hash:', admin.contrasena.substring(0, 4));
+                const user = userResults[0];
+                const estadoAnterior = user.activo;
                 
-                // Generar nuevo hash para comparar
-                const newHash = await bcrypt.hash(contrasena, 12);
-                console.log('🆕 Nuevo hash generado:', newHash);
+                // Si el estado es el mismo, no hacer nada
+                if (estadoAnterior === activoValue) {
+                    return res.status(200).json({
+                        success: true,
+                        message: `El usuario ya está ${activoValue ? 'activo' : 'inactivo'}`,
+                        usuario: {
+                            id_usuario: user.id_usuario,
+                            nombre: user.nombre,
+                            correo: user.correo,
+                            activo: activoValue
+                        }
+                    });
+                }
                 
-                // Probar con hash actual
-                const currentTest = await bcrypt.compare(contrasena, admin.contrasena);
-                console.log('🧪 Test con hash actual:', currentTest ? '✅ FUNCIONA' : '❌ FALLA');
-                
-                // Probar con nuevo hash
-                const newTest = await bcrypt.compare(contrasena, newHash);
-                console.log('🧪 Test con hash nuevo:', newTest ? '✅ FUNCIONA' : '❌ FALLA');
-                
-                res.json({
-                    admin: {
-                        id: admin.id_admin,
-                        nombre: admin.nombre,
-                        correo: admin.correo
-                    },
-                    hash_info: {
-                        current_hash: admin.contrasena,
-                        hash_length: admin.contrasena.length,
-                        hash_type: admin.contrasena.substring(0, 4),
-                        new_hash_generated: newHash
-                    },
-                    tests: {
-                        current_hash_works: currentTest,
-                        new_hash_works: newTest
-                    },
-                    suggested_fix: currentTest ? null : {
-                        message: 'El hash actual no funciona, usar este query:',
-                        query: `UPDATE administradores SET contrasena = '${newHash}' WHERE id_admin = ${id};`
+                // Actualizar el estado del usuario
+                pool.query(
+                    'UPDATE usuarios SET activo = ? WHERE id_usuario = ?',
+                    [activoValue, id_usuario],
+                    (updateErr, updateResults) => {
+                        if (updateErr) {
+                            console.error('Error al actualizar estado del usuario:', updateErr);
+                            return res.status(500).json({
+                                success: false,
+                                message: 'Error al actualizar el estado del usuario',
+                                error: updateErr.message
+                            });
+                        }
+                        
+                        if (updateResults.affectedRows === 0) {
+                            return res.status(500).json({
+                                success: false,
+                                message: 'No se pudo actualizar el estado del usuario'
+                            });
+                        }
+                        
+                        // Log de la acción administrativa
+                        const accion = activoValue ? 'USER_ACTIVATED' : 'USER_DEACTIVATED';
+                        const descripcionLog = `Admin ${adminNombre} (ID: ${adminId}) ${activoValue ? 'activó' : 'desactivó'} al usuario: ${user.nombre} (${user.correo})`;
+                        
+                        pool.query(
+                            'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+                            [adminId, accion, 'usuarios', descripcionLog],
+                            (logErr) => {
+                                if (logErr) {
+                                    console.error('Error al registrar acción administrativa en logs:', logErr);
+                                }
+                            }
+                        );
+                        
+                        console.log(`✅ Usuario ${activoValue ? 'activado' : 'desactivado'} exitosamente:`);
+                        console.log(`   - Usuario: ${user.nombre} (${user.correo})`);
+                        console.log(`   - Por admin: ${adminNombre} (ID: ${adminId})`);
+                        console.log(`   - Estado anterior: ${estadoAnterior ? 'activo' : 'inactivo'}`);
+                        console.log(`   - Estado nuevo: ${activoValue ? 'activo' : 'inactivo'}`);
+                        
+                        res.status(200).json({
+                            success: true,
+                            message: `Usuario ${activoValue ? 'activado' : 'desactivado'} exitosamente`,
+                            usuario: {
+                                id_usuario: user.id_usuario,
+                                nombre: user.nombre,
+                                correo: user.correo,
+                                activo: activoValue,
+                                estado_anterior: estadoAnterior
+                            },
+                            admin_accion: {
+                                admin_id: adminId,
+                                admin_nombre: adminNombre,
+                                timestamp: new Date().toISOString()
+                            }
+                        });
                     }
-                });
+                );
             }
         );
         
     } catch (error) {
-        console.error('Error en debugAdminPassword:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error en toggleUserActiveStatus:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor',
+            error: error.message
+        });
+    }
+};
+
+// Función para obtener usuarios con su estado activo (solo admins)
+exports.getUsersWithActiveStatus = async (req, res) => {
+    try {
+        const adminId = req.admin.id;
+        const adminNombre = req.admin.nombre;
+        
+        // Parámetros de paginación
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+        
+        // Filtro por estado activo (opcional)
+        const activoFilter = req.query.activo; // 'true', 'false', o undefined para todos
+        
+        console.log('📋 === GET USERS WITH ACTIVE STATUS ===');
+        console.log('   - Admin:', adminNombre, '(ID:', adminId + ')');
+        console.log('   - Página:', page);
+        console.log('   - Límite:', limit);
+        console.log('   - Filtro activo:', activoFilter);
+        
+        // Construir consulta base
+        let baseQuery = `
+            SELECT id_usuario, nombre, correo, celular, fecha_nacimiento, sexo, dui, activo, ultimo_acceso
+            FROM usuarios
+        `;
+        let countQuery = 'SELECT COUNT(*) as total FROM usuarios';
+        let queryParams = [];
+        let countParams = [];
+        
+        // Agregar filtro si se especifica
+        if (activoFilter !== undefined) {
+            const activoValue = activoFilter === 'true' ? 1 : 0;
+            baseQuery += ' WHERE activo = ?';
+            countQuery += ' WHERE activo = ?';
+            queryParams.push(activoValue);
+            countParams.push(activoValue);
+        }
+        
+        // Agregar ordenamiento y paginación
+        baseQuery += ' ORDER BY id_usuario DESC LIMIT ? OFFSET ?';
+        queryParams.push(limit, offset);
+        
+        // Ejecutar consulta para obtener total
+        pool.query(countQuery, countParams, (countErr, countResults) => {
+            if (countErr) {
+                console.error('Error al contar usuarios:', countErr);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Error interno del servidor',
+                    error: countErr.message
+                });
+            }
+            
+            const total = countResults[0].total;
+            const totalPages = Math.ceil(total / limit);
+            
+            // Ejecutar consulta para obtener usuarios
+            pool.query(baseQuery, queryParams, (err, userResults) => {
+                if (err) {
+                    console.error('Error al obtener usuarios:', err);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Error interno del servidor',
+                        error: err.message
+                    });
+                }
+                
+                // Log de consulta administrativa
+                const descripcionLog = `Admin ${adminNombre} (ID: ${adminId}) consultó lista de usuarios con estado activo`;
+                pool.query(
+                    'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+                    [adminId, 'ADMIN_VIEW_USERS', 'usuarios', descripcionLog],
+                    (logErr) => {
+                        if (logErr) {
+                            console.error('Error al registrar consulta administrativa en logs:', logErr);
+                        }
+                    }
+                );
+                
+                res.status(200).json({
+                    success: true,
+                    message: 'Usuarios obtenidos exitosamente',
+                    data: {
+                        usuarios: userResults,
+                        pagination: {
+                            page: page,
+                            limit: limit,
+                            total: total,
+                            totalPages: totalPages,
+                            hasNextPage: page < totalPages,
+                            hasPrevPage: page > 1
+                        },
+                        filters: {
+                            activo: activoFilter
+                        }
+                    },
+                    admin_info: {
+                        admin_id: adminId,
+                        admin_nombre: adminNombre,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            });
+        });
+        
+    } catch (error) {
+        console.error('Error en getUsersWithActiveStatus:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor',
+            error: error.message
+        });
     }
 };
