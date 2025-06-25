@@ -247,11 +247,22 @@ exports.loginClient = (req, res) => {
         if(results.length === 0){
             return res.status(401).json({message: 'Credenciales invalidas'})
         }
+          const user = results[0];
         
-        const user = results[0];
+        // Debug: Mostrar el valor de activo y su tipo
+        console.log('🔍 DEBUG - Valor de user.activo:', user.activo);
+        console.log('🔍 DEBUG - Tipo de user.activo:', typeof user.activo);
+        console.log('🔍 DEBUG - Comparación con 0:', user.activo === 0);
+        console.log('🔍 DEBUG - Comparación con "0":', user.activo === "0");
+        console.log('🔍 DEBUG - Comparación con false:', user.activo === false);
+        console.log('🔍 DEBUG - Valor booleano:', !!user.activo);
+          // Verificar si la cuenta está activa
+        // Convertir a número para manejar diferentes tipos de datos que puede devolver MySQL
+        const isActive = Number(user.activo);
         
-        // Verificar si la cuenta está activa
-        if(user.activo === 0){
+        console.log('🔍 DEBUG - Verificación final: isActive =', isActive);
+        
+        if(isActive === 0 || user.activo === false){
             // Log intento de login con cuenta inactiva
             const descripcionLogInactive = `Intento de inicio de sesión con cuenta inactiva: ${user.nombre} (${user.correo})`;
             pool.query(
