@@ -313,7 +313,8 @@ exports.loginClient = (req, res) => {
                     success: true, 
                     message: 'Inicio de sesion exitoso',
                     id_usuario: user.id_usuario,
-                    nombre: user.nombre
+                    nombre: user.nombre,
+                    celular: user.celular
                 });
             }
             else{
