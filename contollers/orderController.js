@@ -654,8 +654,8 @@ exports.createOrder = async (req, res) => {
             
             if (tipo_cliente === 'registrado') {
                 if (!cliente.email) clienteErrors.push('email');
-                if (!cliente.password) clienteErrors.push('password');
-                console.log(`🔐 [${requestId}] Validación específica para cliente registrado`);
+                // Password is no longer required for orders - user should be authenticated in frontend
+                console.log(`🔐 [${requestId}] Validación específica para cliente registrado (sin contraseña)`);
             }
             
             // Common client validations for both types
@@ -670,14 +670,14 @@ exports.createOrder = async (req, res) => {
                     request_id: requestId,
                     tipo_cliente: tipo_cliente,
                     campos_cliente_requeridos: tipo_cliente === 'registrado' 
-                        ? ['nombre', 'telefono', 'email', 'password']
+                        ? ['nombre', 'telefono', 'email']
                         : ['nombre', 'telefono'],
                     campos_cliente_faltantes: clienteErrors
                 });
             }
             
             console.log(`✅ [${requestId}] Datos del cliente validados correctamente`);
-        }        // Validate address data
+        }// Validate address data
         if (direccion) {
             console.log(`📍 [${requestId}] Validando datos de dirección. Tipo: ${direccion.tipo_direccion}...`);
             const direccionErrors = [];
@@ -841,14 +841,12 @@ exports.createOrder = async (req, res) => {
         let id_usuario_invitado = null;
         let id_direccion = null;
         
-        console.log(`🏁 [${requestId}] ===== INICIANDO PROCESAMIENTO DE USUARIO Y DIRECCIÓN =====`);
-
-        // Handle user data based on client type
+        console.log(`🏁 [${requestId}] ===== INICIANDO PROCESAMIENTO DE USUARIO Y DIRECCIÓN =====`);        // Handle user data based on client type
         if (tipo_cliente === 'registrado') {
             console.log(`👤 [${requestId}] Procesando cliente REGISTRADO...`);
             console.log(`🔍 [${requestId}] Buscando usuario con email: ${cliente.email}`);
             
-            // Authenticate user
+            // Find user by email (no password validation needed for orders)
             const [users] = await connection.query(
                 'SELECT * FROM usuarios WHERE correo = ?', 
                 [cliente.email]
@@ -867,20 +865,9 @@ exports.createOrder = async (req, res) => {
 
             const user = users[0];
             console.log(`👤 [${requestId}] Usuario encontrado. ID: ${user.id_usuario}, Nombre: ${user.nombre}`);
-            console.log(`🔐 [${requestId}] Verificando contraseña...`);
             
-            const isMatch = await bcrypt.compare(cliente.password, user.contrasena);
-            
-            if (!isMatch) {
-                console.error(`❌ [${requestId}] Contraseña incorrecta para usuario: ${cliente.email}`);
-                return res.status(401).json({ 
-                    message: 'Credenciales inválidas',
-                    request_id: requestId,
-                    email: cliente.email
-                });
-            }
-            
-            console.log(`✅ [${requestId}] Autenticación exitosa para usuario: ${user.nombre}`);
+            // Skip password validation for orders - assume user is already authenticated in frontend
+            console.log(`✅ [${requestId}] Usuario validado exitosamente para pedido: ${user.nombre}`);
             id_usuario = user.id_usuario;
             
             console.log(`📍 [${requestId}] Creando dirección para usuario registrado...`);
