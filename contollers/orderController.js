@@ -1,7 +1,7 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
-const { parse } = require('path');
+const { notifyOrder } = require('../packages/notifications-client/index');
 
 // Helper function to calculate growth percentage between two values
 const calculateGrowth = (currentValue, previousValue) => {
@@ -1196,7 +1196,13 @@ exports.createOrder = async (req, res) => {
         console.log(`💾 [${requestId}] Confirmando transacción...`);
         // Commit the transaction
         await connection.commit();
-        console.log(`✅ [${requestId}] Transacción confirmada exitosamente`);
+            try {
+                await notifyOrder({orderId: id_pedido, total})
+                console.log(`✅ [${requestId}] Notificación de pedido enviada exitosamente`);
+            } catch (err){
+                console.error(`❌ [${requestId}] Error al enviar notificación de pedido:`, err.message);
+                // No detener el proceso si falla la notificación
+            }
 
         const endTime = Date.now();
         const processingTime = endTime - startTime;
