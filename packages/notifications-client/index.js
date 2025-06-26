@@ -1,5 +1,4 @@
 const axios = require('axios');
-const { param } = require('../../route/activeRoutes');
 
 const NOTIF_URL = process.env.NOTIF_URL;
 const NOTIF_KEY = process.env.NOTIF_KEY;
