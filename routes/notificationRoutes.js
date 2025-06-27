@@ -22,7 +22,7 @@ router.post('/', notificationController.createNotification);
 router.patch('/:id/status', notificationController.updateNotificationStatus);
 
 // Marcar todas las notificaciones como leídas
-router.patch('/mark-all-read', notificationController.markAllNotificationsAsRead);
+router.post('/mark-all-read', notificationController.markAllNotificationsAsRead);
 
 // Eliminar una notificación
 router.delete('/:id', notificationController.deleteNotification);
