@@ -1296,11 +1296,11 @@ exports.changePasswordAdmin = async (req, res) => {
                         console.log(`   👤 Nombre: ${admin.nombre}`);
                         console.log(`   🕒 Timestamp: ${new Date().toISOString()}`);
                         
-                        // Log to database for audit trail
-                        const descripcionLog = `Cambio de contraseña exitoso para administrador: ${admin.nombre} (ID: ${admin.id_admin}, Email: ${admin.correo})`;
+                        // Log to database for audit trail (usando NULL para id_usuario ya que es un admin)
+                        const descripcionLog = `Cambio de contraseña exitoso para administrador: ${admin.nombre} (ID Admin: ${admin.id_admin}, Email: ${admin.correo})`;
                         pool.query(
                             'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
-                            [admin.id_admin, 'CHANGE_PASSWORD_ADMIN', 'administradores', descripcionLog],
+                            [null, 'CHANGE_PASSWORD_ADMIN', 'administradores', descripcionLog],
                             (logErr) => {
                                 if (logErr) {
                                     console.error('Error al registrar cambio de contraseña de admin en logs:', logErr);
@@ -1505,11 +1505,11 @@ exports.loginAdmin = async (req, res) => {
                         }
                     );
                     
-                    // Log successful login
-                    const descripcionLog = `Login exitoso para administrador: ${admin.nombre} (${admin.correo})`;
+                    // Log successful login (usando NULL para id_usuario ya que es un admin)
+                    const descripcionLog = `Login exitoso para administrador: ${admin.nombre} (${admin.correo}) - ID Admin: ${admin.id_admin}`;
                     pool.query(
                         'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
-                        [admin.id_admin, 'ADMIN_LOGIN', 'administradores', descripcionLog],
+                        [null, 'ADMIN_LOGIN', 'administradores', descripcionLog],
                         (logErr) => {
                             if (logErr) {
                                 console.error('Error al registrar login en logs:', logErr);
@@ -1628,11 +1628,11 @@ exports.refreshAdminToken = async (req, res) => {
                 // Generate new token
                 const newAccessToken = generateJWTToken(admin.id_admin, admin.correo, admin.nombre);
                 
-                // Log token refresh
-                const descripcionLog = `Token JWT renovado para administrador: ${admin.nombre} (${admin.correo})`;
+                // Log token refresh (usando NULL para id_usuario ya que es un admin)
+                const descripcionLog = `Token JWT renovado para administrador: ${admin.nombre} (${admin.correo}) - ID Admin: ${admin.id_admin}`;
                 pool.query(
                     'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
-                    [admin.id_admin, 'ADMIN_TOKEN_REFRESH', 'administradores', descripcionLog],
+                    [null, 'ADMIN_TOKEN_REFRESH', 'administradores', descripcionLog],
                     (logErr) => {
                         if (logErr) {
                             console.error('Error al registrar renovación de token en logs:', logErr);
@@ -1793,11 +1793,11 @@ exports.logoutAdmin = async (req, res) => {
         const adminNombre = req.admin.nombre;
         const adminEmail = req.admin.email;
         
-        // Log logout action
-        const descripcionLog = `Logout para administrador: ${adminNombre} (${adminEmail})`;
+        // Log logout action (usando NULL para id_usuario ya que es un admin)
+        const descripcionLog = `Logout para administrador: ${adminNombre} (${adminEmail}) - ID Admin: ${adminId}`;
         pool.query(
             'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
-            [adminId, 'ADMIN_LOGOUT', 'administradores', descripcionLog],
+            [null, 'ADMIN_LOGOUT', 'administradores', descripcionLog],
             (logErr) => {
                 if (logErr) {
                     console.error('Error al registrar logout en logs:', logErr);
@@ -1919,13 +1919,13 @@ exports.toggleUserActiveStatus = async (req, res) => {
                             });
                         }
                         
-                        // Log de la acción administrativa
+                        // Log de la acción administrativa (usando NULL para id_usuario ya que es un admin)
                         const accion = activoValue ? 'USER_ACTIVATED' : 'USER_DEACTIVATED';
-                        const descripcionLog = `Admin ${adminNombre} (ID: ${adminId}) ${activoValue ? 'activó' : 'desactivó'} al usuario: ${user.nombre} (${user.correo})`;
+                        const descripcionLog = `Admin ${adminNombre} (ID Admin: ${adminId}) ${activoValue ? 'activó' : 'desactivó'} al usuario: ${user.nombre} (${user.correo}) (ID Usuario: ${user.id_usuario})`;
                         
                         pool.query(
                             'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
-                            [adminId, accion, 'usuarios', descripcionLog],
+                            [null, accion, 'usuarios', descripcionLog],
                             (logErr) => {
                                 if (logErr) {
                                     console.error('Error al registrar acción administrativa en logs:', logErr);
@@ -2037,11 +2037,11 @@ exports.getUsersWithActiveStatus = async (req, res) => {
                     });
                 }
                 
-                // Log de consulta administrativa
-                const descripcionLog = `Admin ${adminNombre} (ID: ${adminId}) consultó lista de usuarios con estado activo`;
+                // Log de consulta administrativa (usando NULL para id_usuario ya que es un admin)
+                const descripcionLog = `Admin ${adminNombre} (ID Admin: ${adminId}) consultó lista de usuarios con estado activo`;
                 pool.query(
                     'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
-                    [adminId, 'ADMIN_VIEW_USERS', 'usuarios', descripcionLog],
+                    [null, 'ADMIN_VIEW_USERS', 'usuarios', descripcionLog],
                     (logErr) => {
                         if (logErr) {
                             console.error('Error al registrar consulta administrativa en logs:', logErr);

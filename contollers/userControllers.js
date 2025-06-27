@@ -195,11 +195,11 @@ exports.loginAdmin = (req, res) =>{
                     }
                 );
 
-                // Log successful admin login
-                const descripcionLog = `Inicio de sesión exitoso del administrador: ${admin.nombre} (${admin.correo}) - Rol: ${admin.rol}`;
+                // Log successful admin login (usando NULL para id_usuario ya que es un admin)
+                const descripcionLog = `Inicio de sesión exitoso del administrador: ${admin.nombre} (${admin.correo}) - Rol: ${admin.rol} - ID Admin: ${admin.id_admin}`;
                 pool.query(
                     'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
-                    [admin.id_admin, 'LOGIN', 'administradores', descripcionLog],
+                    [null, 'LOGIN', 'administradores', descripcionLog],
                     (logErr) => {
                         if (logErr) {
                             console.error('Error al registrar login en logs:', logErr);
