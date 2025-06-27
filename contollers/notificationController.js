@@ -29,6 +29,19 @@ exports.createNotification = (req, res) => {
                     console.error('Error al crear notificación', err);
                     return res.status(500).json({ error: 'Error al crear notificación' });
                 }
+                
+                // Obtener la notificación recién creada para enviarla vía SSE
+                pool.query(
+                    'SELECT * FROM notificaciones WHERE id_notificacion = ?',
+                    [results.insertId],
+                    (selectErr, selectResults) => {
+                        if (!selectErr && selectResults.length > 0) {
+                            // Enviar notificación a todos los clientes SSE conectados
+                            broadcastNotification(selectResults[0]);
+                        }
+                    }
+                );
+                
                 res.status(201).json({
                     message: 'Notificación creada exitosamente',
                     id_notificacion: results.insertId
@@ -132,5 +145,63 @@ exports.markAllNotificationsAsRead = (req, res) => {
             message: 'Todas las notificaciones marcadas como leídas',
             affectedRows: results.affectedRows
         });
+    });
+};
+
+
+// Almacenar las conexiones SSE activas
+const sseClients = new Set();
+
+// Función para enviar notificación a todos los clientes SSE conectados
+function broadcastNotification(notification) {
+    sseClients.forEach(client => {
+        try {
+            client.write(`data: ${JSON.stringify(notification)}\n\n`);
+        } catch (error) {
+            console.error('Error enviando notificación SSE:', error);
+            sseClients.delete(client);
+        }
+    });
+}
+
+// Endpoint SSE para notificaciones en tiempo real
+exports.getNotificationStream = (req, res) => {
+    // Configurar headers para SSE
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Cache-Control'
+    });
+
+    // Enviar un comentario inicial para establecer la conexión
+    res.write(': SSE connection established\n\n');
+
+    // Agregar cliente a la lista de conexiones activas
+    sseClients.add(res);
+
+    // Enviar notificaciones no leídas al conectarse
+    pool.query("SELECT * FROM notificaciones WHERE estado = 'no leida' ORDER BY fecha_emision DESC", (err, results) => {
+        if (!err && results.length > 0) {
+            results.forEach(notification => {
+                try {
+                    res.write(`data: ${JSON.stringify(notification)}\n\n`);
+                } catch (error) {
+                    console.error('Error enviando notificación inicial:', error);
+                }
+            });
+        }
+    });
+
+    // Manejar desconexión del cliente
+    req.on('close', () => {
+        sseClients.delete(res);
+        console.log('Cliente SSE desconectado');
+    });
+
+    req.on('error', () => {
+        sseClients.delete(res);
+        console.log('Error en conexión SSE');
     });
 };

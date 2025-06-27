@@ -3,6 +3,9 @@ const express = require('express');
 const router = express.Router();
 const notificationController = require('../contollers/notificationController');
 
+// Ruta SSE para notificaciones en tiempo real
+router.get('/stream', notificationController.getNotificationStream);
+
 // Obtener todas las notificaciones
 router.get('/', notificationController.getAllNotifications);
 
