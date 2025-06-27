@@ -35,11 +35,26 @@ const corsOptions = {
         'https://panel.mamamianpizza.com',
         'https://mamamianpizza.com'  // Agregado
     ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control'],
     credentials: true,
+    optionsSuccessStatus: 200 // Para algunos navegadores legacy
 };
 app.use(cors(corsOptions));
+
+// Middleware específico para rutas SSE
+app.use('/api/notifications/stream', (req, res, next) => {
+    const origin = req.headers.origin;
+    const allowedOrigins = corsOptions.origin;
+    
+    if (allowedOrigins.includes(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Headers', 'Cache-Control, Authorization, Content-Type');
+    }
+    next();
+});
+
 app.options('*', cors(corsOptions));
 
 app.use(express.json());

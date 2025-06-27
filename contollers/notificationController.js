@@ -166,14 +166,31 @@ function broadcastNotification(notification) {
 
 // Endpoint SSE para notificaciones en tiempo real
 exports.getNotificationStream = (req, res) => {
+    // Obtener el origin del request
+    const origin = req.headers.origin;
+    const allowedOrigins = [
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://localhost:3000',
+        'https://panel.mamamianpizza.com',
+        'https://mamamianpizza.com'
+    ];
+    
     // Configurar headers para SSE
-    res.writeHead(200, {
+    const headers = {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Cache-Control'
-    });
+        'Access-Control-Allow-Headers': 'Cache-Control, Authorization',
+        'Access-Control-Allow-Credentials': 'true'
+    };
+    
+    // Solo establecer Access-Control-Allow-Origin si el origin está permitido
+    if (allowedOrigins.includes(origin)) {
+        headers['Access-Control-Allow-Origin'] = origin;
+    }
+    
+    res.writeHead(200, headers);
 
     // Enviar un comentario inicial para establecer la conexión
     res.write(': SSE connection established\n\n');
