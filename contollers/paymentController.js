@@ -785,14 +785,38 @@ exports.createWompiTransaction = async (req, res) => {
 
     let connection;
     try {
-        const { 
-            amount, 
-            customer, 
-            orderData, 
-            returnUrls,
-            // Datos de tarjeta requeridos para 3DS
-            cardData 
-        } = req.body;
+        // Detectar formato del payload: nuestro formato vs formato directo de Wompi
+        const isWompiFormat = req.body.tarjetaCreditoDebido && req.body.monto && req.body.nombre;
+        
+        let amount, customer, cardData, orderData, returnUrls;
+        
+        if (isWompiFormat) {
+            // Formato directo de Wompi (el que estás enviando)
+            console.log(`📋 [${requestId}] Detectado formato directo de Wompi`);
+            
+            amount = req.body.monto;
+            customer = {
+                name: `${req.body.nombre} ${req.body.apellido}`,
+                email: req.body.email,
+                phone: req.body.telefono
+            };
+            cardData = req.body.tarjetaCreditoDebido;
+            returnUrls = {
+                success: req.body.urlRedirect || req.body.urlRedireccionAprobacion,
+                failure: req.body.urlRedireccionRechazo
+            };
+            orderData = {
+                direccion: {
+                    municipio: req.body.ciudad,
+                    direccion: req.body.direccion
+                }
+            };
+        } else {
+            // Nuestro formato original
+            console.log(`📋 [${requestId}] Detectado nuestro formato original`);
+            
+            ({ amount, customer, orderData, returnUrls, cardData } = req.body);
+        }
 
         // Validaciones básicas
         if (!amount || !customer || !customer.name || !customer.email) {
@@ -822,48 +846,77 @@ exports.createWompiTransaction = async (req, res) => {
         await connection.beginTransaction();
 
         // Preparar payload según documentación oficial de Wompi 3DS
-        const wompi3DSPayload = {
-            // Datos de tarjeta (REQUERIDOS)
-            tarjetaCreditoDebido: {
-                numeroTarjeta: cardData.numeroTarjeta.replace(/\s/g, ''), // Sin espacios
-                cvv: cardData.cvv,
-                mesVencimiento: parseInt(cardData.mesVencimiento),
-                anioVencimiento: parseInt(cardData.anioVencimiento)
-            },
+        let wompi3DSPayload;
+        
+        if (isWompiFormat) {
+            // Si ya viene en formato Wompi, usarlo directamente y agregar lo que falta
+            console.log(`📤 [${requestId}] Usando payload directo de Wompi con mejoras`);
             
-            // Monto (REQUERIDO)
-            monto: parseFloat(amount),
+            wompi3DSPayload = {
+                ...req.body, // Usar todo lo que viene del frontend
+                // Asegurar configuración del webhook
+                configuracion: {
+                    emailsNotificacion: req.body.email,
+                    urlWebhook: WOMPI_CONFIG.URLS.WEBHOOK,
+                    telefonosNotificacion: req.body.telefono || '',
+                    notificarTransaccionCliente: true,
+                    ...(req.body.configuracion || {}) // Mantener configuración existente si hay
+                },
+                // Agregar datos adicionales
+                datosAdicionales: {
+                    transactionReference: transactionReference,
+                    source: 'mama_mian_pizza',
+                    requestId: requestId,
+                    ...(req.body.datosAdicionales || {}) // Mantener datos existentes si hay
+                }
+            };
+        } else {
+            // Construir desde nuestro formato original
+            console.log(`📤 [${requestId}] Construyendo payload desde nuestro formato`);
             
-            // URL de redirección (REQUERIDA)
-            urlRedirect: returnUrls?.success || `${WOMPI_CONFIG.URLS.REDIRECT_SUCCESS}?ref=${transactionReference}`,
-            
-            // Datos del cliente (REQUERIDOS)
-            nombre: customer.name.split(' ')[0] || customer.name, // Solo primer nombre
-            apellido: customer.name.split(' ').slice(1).join(' ') || 'Cliente', // Resto como apellido
-            email: customer.email,
-            ciudad: orderData?.direccion?.municipio || 'San Salvador',
-            direccion: orderData?.direccion?.direccion || 'Dirección no especificada',
-            idPais: 'SV', // El Salvador
-            idRegion: 'SV-SS', // San Salvador por defecto
-            codigoPostal: '01101',
-            telefono: customer.phone || '',
-            
-            // Configuración (OPCIONAL)
-            configuracion: {
-                emailsNotificacion: customer.email,
-                urlWebhook: WOMPI_CONFIG.URLS.WEBHOOK,
-                telefonosNotificacion: customer.phone || '',
-                notificarTransaccionCliente: true
-            },
-            
-            // Datos adicionales (OPCIONAL)
-            datosAdicionales: {
-                transactionReference: transactionReference,
-                orderId: orderData?.orderId?.toString() || '',
-                source: 'mama_mian_pizza',
-                requestId: requestId
-            }
-        };
+            wompi3DSPayload = {
+                // Datos de tarjeta (REQUERIDOS)
+                tarjetaCreditoDebido: {
+                    numeroTarjeta: cardData.numeroTarjeta.replace(/\s/g, ''), // Sin espacios
+                    cvv: cardData.cvv,
+                    mesVencimiento: parseInt(cardData.mesVencimiento),
+                    anioVencimiento: parseInt(cardData.anioVencimiento)
+                },
+                
+                // Monto (REQUERIDO)
+                monto: parseFloat(amount),
+                
+                // URL de redirección (REQUERIDA)
+                urlRedirect: returnUrls?.success || `${WOMPI_CONFIG.URLS.REDIRECT_SUCCESS}?ref=${transactionReference}`,
+                
+                // Datos del cliente (REQUERIDOS)
+                nombre: customer.name.split(' ')[0] || customer.name, // Solo primer nombre
+                apellido: customer.name.split(' ').slice(1).join(' ') || 'Cliente', // Resto como apellido
+                email: customer.email,
+                ciudad: orderData?.direccion?.municipio || 'San Salvador',
+                direccion: orderData?.direccion?.direccion || 'Dirección no especificada',
+                idPais: 'SV', // El Salvador
+                idRegion: 'SV-SS', // San Salvador por defecto
+                codigoPostal: '01101',
+                telefono: customer.phone || '',
+                
+                // Configuración (OPCIONAL)
+                configuracion: {
+                    emailsNotificacion: customer.email,
+                    urlWebhook: WOMPI_CONFIG.URLS.WEBHOOK,
+                    telefonosNotificacion: customer.phone || '',
+                    notificarTransaccionCliente: true
+                },
+                
+                // Datos adicionales (OPCIONAL)
+                datosAdicionales: {
+                    transactionReference: transactionReference,
+                    orderId: orderData?.orderId?.toString() || '',
+                    source: 'mama_mian_pizza',
+                    requestId: requestId
+                }
+            };
+        }
 
         console.log(`📤 [${requestId}] Enviando solicitud a Wompi 3DS...`);
         console.log(`🔗 [${requestId}] URL: ${WOMPI_CONFIG.BASE_URL}${WOMPI_CONFIG.ENDPOINTS.TRANSACTION_3DS}`);
