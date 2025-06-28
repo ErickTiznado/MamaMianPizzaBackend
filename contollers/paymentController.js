@@ -783,8 +783,9 @@ exports.createWompiTransaction = async (req, res) => {
     console.log(`🆔 Request ID: ${requestId}`);
     console.log(`📝 [${requestId}] Datos recibidos del frontend:`, req.body);
 
+    let connection;
     try {
-        const { amount, customer, orderData } = req.body;
+        const { amount, customer, orderData, returnUrls } = req.body;
 
         // Validaciones básicas
         if (!amount || !customer || !customer.name || !customer.email) {
@@ -799,54 +800,95 @@ exports.createWompiTransaction = async (req, res) => {
         const transactionReference = generateTransactionReference();
         console.log(`🔗 [${requestId}] Referencia generada: ${transactionReference}`);
 
-        // Para la integración inicial, vamos a simular la creación de transacción
-        // y devolver una URL de prueba de Wompi
-        const testWompiUrl = `https://u.wompi.sv/398524Auq?ref=${transactionReference}&amount=${amount}`;
+        // Conectar a la base de datos
+        connection = await pool.promise().getConnection();
+        await connection.beginTransaction();
 
-        // Guardar la transacción en la base de datos
-        let connection;
-        try {
-            connection = await pool.promise().getConnection();
-            
-            const [transactionResult] = await connection.query(`
-                INSERT INTO transacciones_wompi (
-                    transaction_reference, 
-                    order_id, 
-                    amount, 
-                    status, 
-                    customer_name, 
-                    customer_email, 
-                    customer_phone,
-                    redirect_url,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-            `, [
-                transactionReference,
-                orderData?.orderId || null,
-                parseFloat(amount),
-                'pending',
-                customer.name,
-                customer.email,
-                customer.phone || '',
-                testWompiUrl
-            ]);
-
-            console.log(`💾 [${requestId}] Transacción guardada en BD con ID: ${transactionResult.insertId}`);
-
-        } catch (dbError) {
-            console.error(`❌ [${requestId}] Error guardando en BD:`, dbError.message);
-            // Continuar sin guardar en BD por ahora
-        } finally {
-            if (connection) {
-                connection.release();
+        // Preparar payload para Wompi
+        const wompiPayload = {
+            monto: formatAmount(amount),
+            moneda: 'USD',
+            referencia: transactionReference,
+            urlRedireccionAprobacion: returnUrls?.success || `${WOMPI_CONFIG.URLS.REDIRECT_SUCCESS}?ref=${transactionReference}`,
+            urlRedireccionRechazo: returnUrls?.failure || `${WOMPI_CONFIG.URLS.REDIRECT_FAILURE}?ref=${transactionReference}`,
+            urlWebhook: WOMPI_CONFIG.URLS.WEBHOOK,
+            datosCliente: {
+                nombre: customer.name,
+                email: customer.email,
+                telefono: customer.phone || ''
+            },
+            metadatos: {
+                orderData: JSON.stringify(orderData),
+                source: 'mama_mian_pizza_frontend',
+                requestId: requestId
             }
+        };
+
+        console.log(`📤 [${requestId}] Enviando solicitud a Wompi...`);
+        console.log(`🔗 [${requestId}] URL: ${WOMPI_CONFIG.BASE_URL}${WOMPI_CONFIG.ENDPOINTS.PURCHASE_LINK}`);
+
+        // Hacer solicitud a Wompi API para crear enlace de pago
+        const wompiResponse = await axios.post(
+            `${WOMPI_CONFIG.BASE_URL}${WOMPI_CONFIG.ENDPOINTS.PURCHASE_LINK}`,
+            wompiPayload,
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': generateAuthHeader()
+                },
+                timeout: 30000
+            }
+        );
+
+        console.log(`✅ [${requestId}] Respuesta de Wompi:`, {
+            status: wompiResponse.status,
+            data: wompiResponse.data
+        });
+
+        // Verificar que la respuesta contiene la URL de pago
+        if (!wompiResponse.data || !wompiResponse.data.enlacePago) {
+            throw new Error('Wompi no devolvió un enlace de pago válido');
         }
+
+        // Guardar transacción en la base de datos
+        const [transactionResult] = await connection.query(`
+            INSERT INTO transacciones_wompi (
+                transaction_reference, 
+                wompi_transaction_id,
+                order_id, 
+                amount, 
+                status, 
+                customer_name, 
+                customer_email, 
+                customer_phone,
+                redirect_url,
+                created_at,
+                wompi_response
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)
+        `, [
+            transactionReference,
+            wompiResponse.data.idTransaccion || null,
+            orderData?.orderId || null,
+            parseFloat(amount),
+            'pending',
+            customer.name,
+            customer.email,
+            customer.phone || '',
+            wompiResponse.data.enlacePago,
+            JSON.stringify(wompiResponse.data)
+        ]);
+
+        console.log(`💾 [${requestId}] Transacción guardada en BD con ID: ${transactionResult.insertId}`);
+
+        // Commit transaction
+        await connection.commit();
 
         // Respuesta exitosa
         res.status(200).json({
             success: true,
-            redirectUrl: testWompiUrl,
+            redirectUrl: wompiResponse.data.enlacePago,
             transactionReference: transactionReference,
+            wompiTransactionId: wompiResponse.data.idTransaccion,
             message: 'Transacción creada exitosamente'
         });
 
@@ -855,12 +897,26 @@ exports.createWompiTransaction = async (req, res) => {
     } catch (error) {
         console.error(`❌ [${requestId}] Error creando transacción:`, error.message);
         
+        // Rollback transaction if connection exists
+        if (connection) {
+            try {
+                await connection.rollback();
+            } catch (rollbackError) {
+                console.error(`❌ [${requestId}] Error en rollback:`, rollbackError.message);
+            }
+        }
+        
         res.status(500).json({
             success: false,
-            message: 'Error interno del servidor',
+            message: error.response?.data?.mensaje || error.message || 'Error interno del servidor',
             error: error.message,
             request_id: requestId
         });
+    } finally {
+        // Release connection
+        if (connection) {
+            connection.release();
+        }
     }
 
     console.log(`🏁 [${requestId}] ===== FIN CREAR TRANSACCIÓN (FRONTEND) =====\n`);

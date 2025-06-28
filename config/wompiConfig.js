@@ -11,6 +11,7 @@ const WOMPI_CONFIG = {
     ENDPOINTS: {
         TRANSACTION_3DS: '/TransaccionCompra/3DS',
         TRANSACTION_STATUS: '/TransaccionCompra/Estado',
+        PURCHASE_LINK: '/EnlaceCompra',
         WEBHOOK: '/webhook'
     },
     
