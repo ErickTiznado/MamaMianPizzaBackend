@@ -30,6 +30,13 @@ const paymentController = require('../contollers/paymentController');
 router.post('/3ds/create', paymentController.create3DSTransaction);
 
 /**
+ * GET /api/payments/webhook/health
+ * Simple health check for webhook debugging
+ * NOTE: This must come BEFORE the /webhook route
+ */
+router.get('/webhook/health', paymentController.webhookHealth);
+
+/**
  * POST /api/payments/webhook
  * Handle Wompi webhook notifications
  * This endpoint will be called by Wompi when payment status changes

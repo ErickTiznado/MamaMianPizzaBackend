@@ -263,7 +263,7 @@ exports.create3DSTransaction = async (req, res) => {
 };
 
 /**
- * Handle Wompi webhook notifications
+ * Handle Wompi webhook notifications - VERSION MEJORADA
  */
 exports.handleWebhook = async (req, res) => {
     const requestId = `WEBHOOK-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -286,7 +286,24 @@ exports.handleWebhook = async (req, res) => {
             console.log(`✅ [${requestId}] Firma del webhook validada`);
         }
 
-        connection = await pool.promise().getConnection();
+        // Verify if transacciones_wompi table exists
+        try {
+            connection = await pool.promise().getConnection();
+            console.log(`✅ [${requestId}] Conexión a BD establecida`);
+            
+            // Test table existence
+            await connection.query('SELECT 1 FROM transacciones_wompi LIMIT 1');
+            console.log(`✅ [${requestId}] Tabla transacciones_wompi existe`);
+        } catch (tableError) {
+            console.error(`❌ [${requestId}] Error con tabla transacciones_wompi:`, tableError.message);
+            return res.status(500).json({ 
+                success: false, 
+                message: 'Tabla de transacciones no existe. Ejecute las migraciones primero.',
+                error: tableError.message,
+                request_id: requestId
+            });
+        }
+
         await connection.beginTransaction();
 
         // Extract transaction information from webhook
@@ -309,6 +326,16 @@ exports.handleWebhook = async (req, res) => {
             fechaTransaccion
         });
 
+        // Handle test webhooks
+        if (!idTransaccion) {
+            console.log(`❌ [${requestId}] idTransaccion no proporcionado en webhook`);
+            return res.status(400).json({ 
+                success: false, 
+                message: 'idTransaccion es requerido',
+                request_id: requestId
+            });
+        }
+
         // Find the transaction in our database
         const [existingTransaction] = await connection.query(
             'SELECT * FROM transacciones_wompi WHERE wompi_transaction_id = ?',
@@ -317,9 +344,34 @@ exports.handleWebhook = async (req, res) => {
 
         if (existingTransaction.length === 0) {
             console.log(`⚠️ [${requestId}] Transacción no encontrada en la BD: ${idTransaccion}`);
-            return res.status(404).json({ 
+            
+            // For test webhooks, create a test response
+            if (idTransaccion.includes('test') || !estado) {
+                console.log(`🧪 [${requestId}] Procesando webhook de prueba`);
+                await connection.commit();
+                return res.status(200).json({ 
+                    success: true, 
+                    message: 'Webhook de prueba procesado exitosamente',
+                    data: {
+                        transactionId: idTransaccion,
+                        status: estado || 'test',
+                        note: 'Esta es una transacción de prueba. En producción, las transacciones deben existir antes de recibir el webhook.'
+                    },
+                    request_id: requestId
+                });
+            }
+            
+            // For real webhooks, respond with success to avoid retries
+            console.log(`⚠️ [${requestId}] Transacción real no encontrada, respondiendo 200`);
+            await connection.commit();
+            return res.status(200).json({ 
                 success: false, 
-                message: 'Transacción no encontrada' 
+                message: 'Transacción no encontrada en base de datos',
+                data: {
+                    transactionId: idTransaccion,
+                    note: 'Webhook procesado pero transacción no existe en BD'
+                },
+                request_id: requestId
             });
         }
 
@@ -357,25 +409,30 @@ exports.handleWebhook = async (req, res) => {
         if (estado === 'APROBADA' && transaction.order_id) {
             console.log(`📦 [${requestId}] Actualizando estado del pedido: ${transaction.order_id}`);
             
-            const [orderUpdateResult] = await connection.query(`
-                UPDATE pedidos 
-                SET 
-                    estado = 'confirmado',
-                    metodo_pago = 'wompi_3ds',
-                    payment_reference = ?,
-                    payment_authorization = ?,
-                    payment_completed_at = NOW()
-                WHERE id_pedido = ?
-            `, [
-                transaction.transaction_reference,
-                codigoAutorizacion || null,
-                transaction.order_id
-            ]);
+            // Check if pedidos table has the new columns
+            try {
+                const [orderUpdateResult] = await connection.query(`
+                    UPDATE pedidos 
+                    SET 
+                        estado = 'confirmado',
+                        metodo_pago = 'wompi_3ds'
+                        ${transaction.transaction_reference ? ', payment_reference = ?' : ''}
+                        ${codigoAutorizacion ? ', payment_authorization = ?, payment_completed_at = NOW()' : ''}
+                    WHERE id_pedido = ?
+                `, [
+                    ...(transaction.transaction_reference ? [transaction.transaction_reference] : []),
+                    ...(codigoAutorizacion ? [codigoAutorizacion] : []),
+                    transaction.order_id
+                ]);
 
-            if (orderUpdateResult.affectedRows > 0) {
-                console.log(`✅ [${requestId}] Pedido actualizado exitosamente`);
-            } else {
-                console.log(`⚠️ [${requestId}] No se pudo actualizar el pedido`);
+                if (orderUpdateResult.affectedRows > 0) {
+                    console.log(`✅ [${requestId}] Pedido actualizado exitosamente`);
+                } else {
+                    console.log(`⚠️ [${requestId}] No se pudo actualizar el pedido`);
+                }
+            } catch (orderError) {
+                console.log(`⚠️ [${requestId}] Error actualizando pedido (probablemente faltan columnas nuevas):`, orderError.message);
+                // Continue anyway, the transaction update is more important
             }
         }
 
@@ -394,6 +451,7 @@ exports.handleWebhook = async (req, res) => {
 
     } catch (error) {
         console.error(`❌ [${requestId}] Error procesando webhook:`, error.message);
+        console.error(`❌ [${requestId}] Stack trace:`, error.stack);
         
         if (connection) {
             try {
@@ -408,6 +466,7 @@ exports.handleWebhook = async (req, res) => {
             success: false,
             message: 'Error procesando webhook',
             error: error.message,
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
             request_id: requestId
         });
 
@@ -694,4 +753,22 @@ exports.handlePaymentRedirect = async (req, res) => {
             connection.release();
         }
     }
+};
+
+/**
+ * Simple health check for webhook debugging
+ */
+exports.webhookHealth = async (req, res) => {
+    console.log('🏥 Webhook health check called');
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    
+    res.status(200).json({
+        success: true,
+        message: 'Webhook endpoint is working',
+        timestamp: new Date().toISOString(),
+        method: req.method,
+        headers: req.headers,
+        body: req.body
+    });
 };
