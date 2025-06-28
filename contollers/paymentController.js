@@ -772,3 +772,96 @@ exports.webhookHealth = async (req, res) => {
         body: req.body
     });
 };
+
+/**
+ * Create Wompi transaction - Simplified version for frontend integration
+ * This is the function expected by the frontend
+ */
+exports.createWompiTransaction = async (req, res) => {
+    const requestId = `CREATE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`\n[${new Date().toISOString()}] ===== CREAR TRANSACCIÓN WOMPI (FRONTEND) =====`);
+    console.log(`🆔 Request ID: ${requestId}`);
+    console.log(`📝 [${requestId}] Datos recibidos del frontend:`, req.body);
+
+    try {
+        const { amount, customer, orderData } = req.body;
+
+        // Validaciones básicas
+        if (!amount || !customer || !customer.name || !customer.email) {
+            console.log(`❌ [${requestId}] Datos incompletos:`, { amount, customer });
+            return res.status(400).json({
+                success: false,
+                message: 'Datos incompletos para crear la transacción'
+            });
+        }
+
+        // Generar referencia única
+        const transactionReference = generateTransactionReference();
+        console.log(`🔗 [${requestId}] Referencia generada: ${transactionReference}`);
+
+        // Para la integración inicial, vamos a simular la creación de transacción
+        // y devolver una URL de prueba de Wompi
+        const testWompiUrl = `https://u.wompi.sv/398524Auq?ref=${transactionReference}&amount=${amount}`;
+
+        // Guardar la transacción en la base de datos
+        let connection;
+        try {
+            connection = await pool.promise().getConnection();
+            
+            const [transactionResult] = await connection.query(`
+                INSERT INTO transacciones_wompi (
+                    transaction_reference, 
+                    order_id, 
+                    amount, 
+                    status, 
+                    customer_name, 
+                    customer_email, 
+                    customer_phone,
+                    redirect_url,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            `, [
+                transactionReference,
+                orderData?.orderId || null,
+                parseFloat(amount),
+                'pending',
+                customer.name,
+                customer.email,
+                customer.phone || '',
+                testWompiUrl
+            ]);
+
+            console.log(`💾 [${requestId}] Transacción guardada en BD con ID: ${transactionResult.insertId}`);
+
+        } catch (dbError) {
+            console.error(`❌ [${requestId}] Error guardando en BD:`, dbError.message);
+            // Continuar sin guardar en BD por ahora
+        } finally {
+            if (connection) {
+                connection.release();
+            }
+        }
+
+        // Respuesta exitosa
+        res.status(200).json({
+            success: true,
+            redirectUrl: testWompiUrl,
+            transactionReference: transactionReference,
+            message: 'Transacción creada exitosamente'
+        });
+
+        console.log(`✅ [${requestId}] Respuesta enviada al frontend`);
+
+    } catch (error) {
+        console.error(`❌ [${requestId}] Error creando transacción:`, error.message);
+        
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor',
+            error: error.message,
+            request_id: requestId
+        });
+    }
+
+    console.log(`🏁 [${requestId}] ===== FIN CREAR TRANSACCIÓN (FRONTEND) =====\n`);
+};

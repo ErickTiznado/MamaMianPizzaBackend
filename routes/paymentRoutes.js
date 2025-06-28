@@ -5,6 +5,13 @@ const paymentController = require('../contollers/paymentController');
 // Wompi 3DS Payment Routes
 
 /**
+ * POST /api/payments/create-transaction
+ * Simplified endpoint for frontend integration
+ * Expected by the frontend application
+ */
+router.post('/create-transaction', paymentController.createWompiTransaction);
+
+/**
  * POST /api/payments/3ds/create
  * Create a new 3DS payment transaction
  * 
