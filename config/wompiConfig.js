@@ -9,9 +9,9 @@ const WOMPI_CONFIG = {
     // API URLs
     BASE_URL: 'https://api.wompi.sv',
     ENDPOINTS: {
-        TRANSACTION_3DS: '/TransaccionCompra/3DS',
+        TRANSACTION_3DS: '/TransaccionCompra/3DS', // Endpoint correcto según documentación
         TRANSACTION_STATUS: '/TransaccionCompra/Estado',
-        PURCHASE_LINK: '/EnlaceCompra',
+        PURCHASE_LINK: '/EnlaceCompra', // Mantener para otros usos
         WEBHOOK: '/webhook'
     },
     
