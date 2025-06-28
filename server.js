@@ -22,6 +22,7 @@ const accountRoutes = require('./routes/accountRoutes'); // Import account route
 const segmentacionRoutes = require('./routes/segmentacionRoutes'); // Import the new route
 const logsRoutes = require('./routes/logsRoutes'); // Import logs routes
 const activeRoutes = require('./routes/activeRoutes'); // Import activar usuarios routes
+const paymentRoutes = require('./routes/paymentRoutes'); // Import payment routes
 // Initialize express app
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -102,6 +103,7 @@ app.use('/api/account', accountRoutes); // Use account routes
 app.use('/api/segmentacion', segmentacionRoutes); // Use the new route for customer segmentation
 app.use('/api/logs', logsRoutes); // Use logs routes
 app.use('/api/act', activeRoutes); // Use activar usuarios routes
+app.use('/api/payments', paymentRoutes); // Use payment routes
 // Default route
 
 app.get('/', (req, res) => {

@@ -5,6 +5,9 @@ const orderController = require('../contollers/orderController');
 // Route to create a new order
 router.post('/neworder', orderController.createOrder);
 
+// Route to create a new order with integrated Wompi 3DS payment
+router.post('/neworder-with-payment', orderController.createOrderWithWompiPayment);
+
 // Rutas para obtener y gestionar pedidos
 router.get('/orders', orderController.getAllOrders);
 router.get('/orders/user/:userId', orderController.getOrdersByUserId);
