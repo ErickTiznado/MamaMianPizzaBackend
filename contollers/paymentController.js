@@ -932,7 +932,8 @@ exports.createWompiTransaction = async (req, res) => {
         });
 
         // MODO DESARROLLO: Simular respuesta de Wompi mientras obtienes credenciales reales
-        if (process.env.NODE_ENV === 'development' || true) {
+        const simulateMode = process.env.WOMPI_SIMULATE_MODE === 'true';
+        if (simulateMode) {
             console.log(`🧪 [${requestId}] MODO DESARROLLO: Simulando respuesta de Wompi 3DS`);
             
             // Simular respuesta exitosa de Wompi 3DS según documentación
