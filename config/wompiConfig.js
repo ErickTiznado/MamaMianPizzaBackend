@@ -29,11 +29,18 @@ const WOMPI_CONFIG = {
 
 /**
  * Generate authorization header for Wompi API
+ * @param {string} type - 'basic' or 'bearer'
  * @returns {string} Authorization header value
  */
-const generateAuthHeader = () => {
-    const credentials = `${WOMPI_CONFIG.APP_ID}:${WOMPI_CONFIG.API_SECRET}`;
-    return `Basic ${Buffer.from(credentials).toString('base64')}`;
+const generateAuthHeader = (type = 'basic') => {
+    if (type === 'bearer') {
+        // Intenta usar solo el API_SECRET como Bearer token
+        return `Bearer ${WOMPI_CONFIG.API_SECRET}`;
+    } else {
+        // Usa Basic Auth (método original)
+        const credentials = `${WOMPI_CONFIG.APP_ID}:${WOMPI_CONFIG.API_SECRET}`;
+        return `Basic ${Buffer.from(credentials).toString('base64')}`;
+    }
 };
 
 /**
