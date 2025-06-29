@@ -774,41 +774,22 @@ exports.createOrder = async (req, res) => {
             });
         }
         
-        console.log(`✅ [${requestId}] Todos los productos validados correctamente`);        // Validate payment method
+        console.log(`✅ [${requestId}] Todos los productos validados correctamente`);        
+        
+        // Basic payment method validation (only cash allowed now)
         console.log(`💳 [${requestId}] Validando método de pago: ${metodo_pago}...`);
-        const metodosValidos = ['efectivo', 'tarjeta', 'transferencia'];
+        const metodosValidos = ['efectivo'];
         if (!metodosValidos.includes(metodo_pago)) {
             console.error(`❌ [${requestId}] Método de pago inválido: ${metodo_pago}`);
             return res.status(400).json({
                 message: 'Método de pago inválido',
-                detalle: `El método de pago "${metodo_pago}" no es válido`,
+                detalle: `El método de pago "${metodo_pago}" no es válido. Solo se acepta efectivo.`,
                 request_id: requestId,
                 metodos_validos: metodosValidos
             });
         }
         
-        console.log(`✅ [${requestId}] Método de pago validado correctamente`);
-
-        // Validate payment method specific fields
-        if (metodo_pago === 'tarjeta') {
-            console.log(`💳 [${requestId}] Validando datos específicos de tarjeta...`);
-            const tarjetaErrors = [];
-            if (!req.body.num_tarjeta_masked) tarjetaErrors.push('num_tarjeta_masked');
-            if (!req.body.nombre_tarjeta) tarjetaErrors.push('nombre_tarjeta');
-            
-            if (tarjetaErrors.length > 0) {
-                console.error(`❌ [${requestId}] Errores en datos de tarjeta:`, tarjetaErrors);
-                return res.status(400).json({
-                    message: 'Faltan datos de tarjeta',
-                    detalle: `Para pagos con tarjeta se requieren: ${tarjetaErrors.join(', ')}`,
-                    request_id: requestId,
-                    campos_tarjeta_requeridos: ['num_tarjeta_masked', 'nombre_tarjeta'],
-                    campos_tarjeta_faltantes: tarjetaErrors
-                });
-            }
-            
-            console.log(`✅ [${requestId}] Datos de tarjeta validados correctamente`);
-        }        // Validate numeric fields
+        console.log(`✅ [${requestId}] Método de pago validado correctamente`);        // Validate numeric fields
         console.log(`🔢 [${requestId}] Validando campos numéricos...`);
         if (isNaN(total) || total <= 0) {
             console.error(`❌ [${requestId}] Total inválido: ${total}`);
@@ -1004,11 +985,7 @@ exports.createOrder = async (req, res) => {
 
         console.log(`📝 [${requestId}] Query del pedido:`, orderQuery);
         console.log(`📝 [${requestId}] Campos del pedido:`, orderInsertFields);
-        console.log(`📝 [${requestId}] Valores del pedido (sin datos sensibles):`, orderInsertValues.map((val, index) => {
-            if (orderInsertFields[index] === 'num_tarjeta_masked') return val ? '[TARJETA_MASKED]' : val;
-            if (orderInsertFields[index] === 'nombre_tarjeta') return val ? '[NOMBRE_TARJETA]' : val;
-            return val;
-        }));
+        console.log(`📝 [${requestId}] Valores del pedido:`, orderInsertValues);
 
         console.log(`💾 [${requestId}] Ejecutando inserción del pedido...`);
         const [orderResult] = await connection.query(orderQuery, orderInsertValues);
