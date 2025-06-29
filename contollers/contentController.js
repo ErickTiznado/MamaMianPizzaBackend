@@ -134,16 +134,11 @@ exports.submitContent = (req, res) => {
       return res.status(500).json({ message: 'Error al subir la imagen: ' + err.message });
     }
 
-    const { titulo, descripcion, categoria, sesion, precios, urls_pago } = req.body;
+    const { titulo, descripcion, categoria, sesion, precios } = req.body;
     // precios debe venir como objeto: { "1": "6.00", "2": "8.00", ... }
     const preciosObj = typeof precios === 'string'
       ? JSON.parse(precios)
       : precios;
-    
-    // urls_pago debe venir como objeto: { "1": "https://...", "2": "https://...", ... }
-    const urlsPagoObj = typeof urls_pago === 'string'
-      ? JSON.parse(urls_pago)
-      : urls_pago || {};
 
     if (!titulo || !descripcion || !sesion || !categoria || !preciosObj) {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
@@ -179,10 +174,9 @@ exports.submitContent = (req, res) => {
           let pendientes = entries.length, fallo = false;
 
           entries.forEach(([tamanoId, precio]) => {
-            const urlPago = urlsPagoObj[tamanoId] || ''; // Si no se proporciona URL, usar string vacío
             pool.query(
-              `INSERT INTO precios (pizza_id, tamano_id, precio, url_pago) VALUES (?, ?, ?, ?)`,
-              [pizzaId, tamanoId, parseFloat(precio), urlPago],
+              `INSERT INTO precios (pizza_id, tamano_id, precio) VALUES (?, ?, ?)`,
+              [pizzaId, tamanoId, parseFloat(precio)],
               err => {                if (err && !fallo) {
                   fallo = true;
                   console.error('Error al insertar precio', err);
@@ -270,8 +264,7 @@ exports.getMenu = (req, res) => {
       t.id_tamano,
       t.nombre    AS tamano,
       t.indice    AS orden_tamano,
-      pr.precio,
-      pr.url_pago
+      pr.precio
     FROM productos p
     JOIN precios pr ON p.id_producto = pr.pizza_id
     JOIN tamanos t  ON pr.tamano_id   = t.id_tamano
@@ -306,8 +299,7 @@ exports.getMenu = (req, res) => {
       mapa[r.id_producto].opciones.push({
         tamanoId: r.id_tamano,
         nombre:   r.tamano,
-        precio:   parseFloat(r.precio),
-        url_pago: r.url_pago
+        precio:   parseFloat(r.precio)
       });
     });
     const menu = Object.values(mapa);
@@ -367,15 +359,10 @@ exports.getMenu = (req, res) => {
     if (err) return res.status(400).json({ message: err.message });
 
     const { id_producto } = req.params;
-    const { titulo, descripcion, categoria, sesion, precios, urls_pago } = req.body;
+    const { titulo, descripcion, categoria, sesion, precios } = req.body;
     const preciosObj = typeof precios === 'string'
       ? JSON.parse(precios)
       : precios;
-    
-    // urls_pago debe venir como objeto: { "1": "https://...", "2": "https://...", ... }
-    const urlsPagoObj = typeof urls_pago === 'string'
-      ? JSON.parse(urls_pago)
-      : urls_pago || {};
 
     if (!titulo || !descripcion || !sesion || !categoria || !preciosObj) {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
@@ -421,10 +408,9 @@ exports.getMenu = (req, res) => {
               let pendientes = entries.length, fallo = false;
 
               entries.forEach(([tamanoId, precio]) => {
-                const urlPago = urlsPagoObj[tamanoId] || ''; // Si no se proporciona URL, usar string vacío
                 pool.query(
-                  `INSERT INTO precios (pizza_id, tamano_id, precio, url_pago) VALUES (?, ?, ?, ?)`,
-                  [id_producto, tamanoId, parseFloat(precio), urlPago],
+                  `INSERT INTO precios (pizza_id, tamano_id, precio) VALUES (?, ?, ?)`,
+                  [id_producto, tamanoId, parseFloat(precio)],
                   err => {                    if (err && !fallo) {
                       fallo = true;
                       console.error(err);
