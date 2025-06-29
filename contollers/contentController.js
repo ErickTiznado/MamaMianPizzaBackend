@@ -134,13 +134,13 @@ exports.submitContent = (req, res) => {
       return res.status(500).json({ message: 'Error al subir la imagen: ' + err.message });
     }
 
-    const { titulo, descripcion, categoria, sesion, precios } = req.body;
+    const { titulo, descripcion, categoria, sesion, precios, url_pago } = req.body;
     // precios debe venir como objeto: { "1": "6.00", "2": "8.00", ... }
     const preciosObj = typeof precios === 'string'
       ? JSON.parse(precios)
       : precios;
 
-    if (!titulo || !descripcion || !sesion || !categoria || !preciosObj) {
+    if (!titulo || !descripcion || !sesion || !categoria || !preciosObj || !url_pago) {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
     }
 
@@ -158,9 +158,9 @@ exports.submitContent = (req, res) => {
       // 1) Creamos el producto
       pool.query(
         `INSERT INTO productos
-           (titulo, descripcion, seccion, id_categoria, activo, imagen, fecha_creacion, fecha_actualizacion)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actualDate, actualDate],        (err, result) => {          if (err) {
+           (titulo, descripcion, seccion, id_categoria, activo, imagen, url_pago, fecha_creacion, fecha_actualizacion)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, url_pago, actualDate, actualDate],        (err, result) => {          if (err) {
             console.error(err);
             // Log product creation error
             const descripcionLog = `Error al crear producto: "${titulo}" - ${err.message}`;
@@ -258,6 +258,7 @@ exports.getMenu = (req, res) => {
       p.titulo,
       p.descripcion,
       p.imagen,
+      p.url_pago,
       p.activo,
       c.nombre    AS categoria,
       c.descripcion AS categoria_descripcion,
@@ -290,6 +291,7 @@ exports.getMenu = (req, res) => {
           titulo: r.titulo,
           descripcion: r.descripcion,
           imagen: r.imagen,
+          url_pago: r.url_pago,
           activo: r.activo,
           categoria: r.categoria,
           categoria_descripcion: r.categoria_descripcion,
@@ -359,12 +361,12 @@ exports.getMenu = (req, res) => {
     if (err) return res.status(400).json({ message: err.message });
 
     const { id_producto } = req.params;
-    const { titulo, descripcion, categoria, sesion, precios } = req.body;
+    const { titulo, descripcion, categoria, sesion, precios, url_pago } = req.body;
     const preciosObj = typeof precios === 'string'
       ? JSON.parse(precios)
       : precios;
 
-    if (!titulo || !descripcion || !sesion || !categoria || !preciosObj) {
+    if (!titulo || !descripcion || !sesion || !categoria || !preciosObj || !url_pago) {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
     }
 
@@ -380,9 +382,9 @@ exports.getMenu = (req, res) => {
       // 1) Actualizar datos básicos de la pizza
       pool.query(
         `UPDATE productos SET
-           titulo = ?, descripcion = ?, seccion = ?, id_categoria = ?, activo = ?, imagen = COALESCE(?, imagen), fecha_actualizacion = ?
+           titulo = ?, descripcion = ?, seccion = ?, id_categoria = ?, activo = ?, imagen = COALESCE(?, imagen), url_pago = ?, fecha_actualizacion = ?
          WHERE id_producto = ?`,
-        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actDate, id_producto],        err => {
+        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, url_pago, actDate, id_producto],        err => {
           if (err) {
             console.error(err);
             // Log product update error
