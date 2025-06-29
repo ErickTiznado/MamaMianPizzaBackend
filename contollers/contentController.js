@@ -134,13 +134,18 @@ exports.submitContent = (req, res) => {
       return res.status(500).json({ message: 'Error al subir la imagen: ' + err.message });
     }
 
-    const { titulo, descripcion, categoria, sesion, precios, url_pago } = req.body;
+    const { titulo, descripcion, categoria, sesion, precios, urls_pago } = req.body;
     // precios debe venir como objeto: { "1": "6.00", "2": "8.00", ... }
     const preciosObj = typeof precios === 'string'
       ? JSON.parse(precios)
       : precios;
+    
+    // urls_pago debe venir como objeto: { "1": "https://...", "2": "https://...", ... }
+    const urlsPagoObj = typeof urls_pago === 'string'
+      ? JSON.parse(urls_pago)
+      : urls_pago || {};
 
-    if (!titulo || !descripcion || !sesion || !categoria || !preciosObj || !url_pago) {
+    if (!titulo || !descripcion || !sesion || !categoria || !preciosObj) {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
     }
 
@@ -158,9 +163,9 @@ exports.submitContent = (req, res) => {
       // 1) Creamos el producto
       pool.query(
         `INSERT INTO productos
-           (titulo, descripcion, seccion, id_categoria, activo, imagen, url_pago, fecha_creacion, fecha_actualizacion)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, url_pago, actualDate, actualDate],        (err, result) => {          if (err) {
+           (titulo, descripcion, seccion, id_categoria, activo, imagen, fecha_creacion, fecha_actualizacion)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actualDate, actualDate],        (err, result) => {          if (err) {
             console.error(err);
             // Log product creation error
             const descripcionLog = `Error al crear producto: "${titulo}" - ${err.message}`;
@@ -174,9 +179,10 @@ exports.submitContent = (req, res) => {
           let pendientes = entries.length, fallo = false;
 
           entries.forEach(([tamanoId, precio]) => {
+            const urlPago = urlsPagoObj[tamanoId] || ''; // Si no se proporciona URL, usar string vacío
             pool.query(
-              `INSERT INTO precios (pizza_id, tamano_id, precio) VALUES (?, ?, ?)`,
-              [pizzaId, tamanoId, parseFloat(precio)],
+              `INSERT INTO precios (pizza_id, tamano_id, precio, url_pago) VALUES (?, ?, ?, ?)`,
+              [pizzaId, tamanoId, parseFloat(precio), urlPago],
               err => {                if (err && !fallo) {
                   fallo = true;
                   console.error('Error al insertar precio', err);
@@ -258,14 +264,14 @@ exports.getMenu = (req, res) => {
       p.titulo,
       p.descripcion,
       p.imagen,
-      p.url_pago,
       p.activo,
       c.nombre    AS categoria,
       c.descripcion AS categoria_descripcion,
       t.id_tamano,
       t.nombre    AS tamano,
       t.indice    AS orden_tamano,
-      pr.precio
+      pr.precio,
+      pr.url_pago
     FROM productos p
     JOIN precios pr ON p.id_producto = pr.pizza_id
     JOIN tamanos t  ON pr.tamano_id   = t.id_tamano
@@ -291,7 +297,6 @@ exports.getMenu = (req, res) => {
           titulo: r.titulo,
           descripcion: r.descripcion,
           imagen: r.imagen,
-          url_pago: r.url_pago,
           activo: r.activo,
           categoria: r.categoria,
           categoria_descripcion: r.categoria_descripcion,
@@ -301,7 +306,8 @@ exports.getMenu = (req, res) => {
       mapa[r.id_producto].opciones.push({
         tamanoId: r.id_tamano,
         nombre:   r.tamano,
-        precio:   parseFloat(r.precio)
+        precio:   parseFloat(r.precio),
+        url_pago: r.url_pago
       });
     });
     const menu = Object.values(mapa);
@@ -361,12 +367,17 @@ exports.getMenu = (req, res) => {
     if (err) return res.status(400).json({ message: err.message });
 
     const { id_producto } = req.params;
-    const { titulo, descripcion, categoria, sesion, precios, url_pago } = req.body;
+    const { titulo, descripcion, categoria, sesion, precios, urls_pago } = req.body;
     const preciosObj = typeof precios === 'string'
       ? JSON.parse(precios)
       : precios;
+    
+    // urls_pago debe venir como objeto: { "1": "https://...", "2": "https://...", ... }
+    const urlsPagoObj = typeof urls_pago === 'string'
+      ? JSON.parse(urls_pago)
+      : urls_pago || {};
 
-    if (!titulo || !descripcion || !sesion || !categoria || !preciosObj || !url_pago) {
+    if (!titulo || !descripcion || !sesion || !categoria || !preciosObj) {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
     }
 
@@ -382,9 +393,9 @@ exports.getMenu = (req, res) => {
       // 1) Actualizar datos básicos de la pizza
       pool.query(
         `UPDATE productos SET
-           titulo = ?, descripcion = ?, seccion = ?, id_categoria = ?, activo = ?, imagen = COALESCE(?, imagen), url_pago = ?, fecha_actualizacion = ?
+           titulo = ?, descripcion = ?, seccion = ?, id_categoria = ?, activo = ?, imagen = COALESCE(?, imagen), fecha_actualizacion = ?
          WHERE id_producto = ?`,
-        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, url_pago, actDate, id_producto],        err => {
+        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actDate, id_producto],        err => {
           if (err) {
             console.error(err);
             // Log product update error
@@ -410,9 +421,10 @@ exports.getMenu = (req, res) => {
               let pendientes = entries.length, fallo = false;
 
               entries.forEach(([tamanoId, precio]) => {
+                const urlPago = urlsPagoObj[tamanoId] || ''; // Si no se proporciona URL, usar string vacío
                 pool.query(
-                  `INSERT INTO precios (pizza_id, tamano_id, precio) VALUES (?, ?, ?)`,
-                  [id_producto, tamanoId, parseFloat(precio)],
+                  `INSERT INTO precios (pizza_id, tamano_id, precio, url_pago) VALUES (?, ?, ?, ?)`,
+                  [id_producto, tamanoId, parseFloat(precio), urlPago],
                   err => {                    if (err && !fallo) {
                       fallo = true;
                       console.error(err);

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: vps.mamamianpizza.com
--- Tiempo de generación: 29-06-2025 a las 17:05:08
+-- Tiempo de generación: 29-06-2025 a las 19:16:39
 -- Versión del servidor: 8.4.5
 -- Versión de PHP: 8.3.19
 
@@ -2535,7 +2535,17 @@ INSERT INTO `logs` (`id_log`, `id_usuario`, `accion`, `tabla_afectada`, `fecha_h
 (2231, NULL, 'READ', 'productos', '2025-06-29 14:02:12', '[ANONIMO]: Productos más populares consultados exitosamente - 1 productos encontrados'),
 (2232, NULL, 'READ', 'productos', '2025-06-29 14:02:12', '[ANONIMO]: Recomendaciones de la casa consultadas exitosamente - 2 productos encontrados'),
 (2233, NULL, 'READ', 'productos', '2025-06-29 14:02:12', '[ANONIMO]: Productos más populares consultados exitosamente - 1 productos encontrados'),
-(2234, NULL, 'READ', 'productos', '2025-06-29 14:02:12', '[ANONIMO]: Recomendaciones de la casa consultadas exitosamente - 2 productos encontrados');
+(2234, NULL, 'READ', 'productos', '2025-06-29 14:02:12', '[ANONIMO]: Recomendaciones de la casa consultadas exitosamente - 2 productos encontrados'),
+(2235, NULL, 'READ', 'productos', '2025-06-29 16:11:36', '[ANONIMO]: Menú consultado exitosamente - 12 registros encontrados'),
+(2236, NULL, 'READ', 'productos', '2025-06-29 17:02:08', '[ANONIMO]: Menú consultado exitosamente - 12 registros encontrados'),
+(2237, NULL, 'READ', 'productos', '2025-06-29 17:11:01', '[ANONIMO]: Recomendaciones de la casa consultadas exitosamente - 2 productos encontrados'),
+(2238, NULL, 'READ', 'productos', '2025-06-29 17:11:02', '[ANONIMO]: Productos más populares consultados exitosamente - 1 productos encontrados'),
+(2239, NULL, 'READ', 'productos', '2025-06-29 17:11:02', '[ANONIMO]: Recomendaciones de la casa consultadas exitosamente - 2 productos encontrados'),
+(2240, NULL, 'READ', 'productos', '2025-06-29 17:11:02', '[ANONIMO]: Productos más populares consultados exitosamente - 1 productos encontrados'),
+(2241, NULL, 'READ', 'productos', '2025-06-29 17:14:54', '[ANONIMO]: Productos más populares consultados exitosamente - 1 productos encontrados'),
+(2242, NULL, 'READ', 'productos', '2025-06-29 17:14:54', '[ANONIMO]: Recomendaciones de la casa consultadas exitosamente - 2 productos encontrados'),
+(2243, NULL, 'READ', 'productos', '2025-06-29 17:14:54', '[ANONIMO]: Productos más populares consultados exitosamente - 1 productos encontrados'),
+(2244, NULL, 'READ', 'productos', '2025-06-29 17:14:54', '[ANONIMO]: Recomendaciones de la casa consultadas exitosamente - 2 productos encontrados');
 
 -- --------------------------------------------------------
 
@@ -2863,26 +2873,27 @@ INSERT INTO `pedidos` (`id_pedido`, `codigo_pedido`, `id_usuario`, `id_direccion
 CREATE TABLE `precios` (
   `pizza_id` int NOT NULL,
   `tamano_id` int NOT NULL,
-  `precio` decimal(10,2) NOT NULL
+  `precio` decimal(10,2) NOT NULL,
+  `url_pago` varchar(300) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Volcado de datos para la tabla `precios`
 --
 
-INSERT INTO `precios` (`pizza_id`, `tamano_id`, `precio`) VALUES
-(9, 1, 4.00),
-(9, 2, 6.00),
-(9, 3, 8.00),
-(9, 4, 12.00),
-(10, 1, 4.00),
-(10, 2, 6.00),
-(10, 3, 8.00),
-(10, 4, 12.00),
-(13, 1, 4.00),
-(13, 2, 6.00),
-(13, 3, 8.00),
-(13, 4, 12.00);
+INSERT INTO `precios` (`pizza_id`, `tamano_id`, `precio`, `url_pago`) VALUES
+(9, 1, 4.00, ''),
+(9, 2, 6.00, ''),
+(9, 3, 8.00, ''),
+(9, 4, 12.00, ''),
+(10, 1, 4.00, ''),
+(10, 2, 6.00, ''),
+(10, 3, 8.00, ''),
+(10, 4, 12.00, ''),
+(13, 1, 4.00, ''),
+(13, 2, 6.00, ''),
+(13, 3, 8.00, ''),
+(13, 4, 12.00, '');
 
 -- --------------------------------------------------------
 
@@ -2898,7 +2909,6 @@ CREATE TABLE `productos` (
   `id_categoria` int DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT '1',
   `imagen` varchar(255) DEFAULT NULL,
-  `url_pago` varchar(300) NOT NULL,
   `fecha_creacion` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `fecha_actualizacion` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -2907,13 +2917,13 @@ CREATE TABLE `productos` (
 -- Volcado de datos para la tabla `productos`
 --
 
-INSERT INTO `productos` (`id_producto`, `titulo`, `descripcion`, `seccion`, `id_categoria`, `activo`, `imagen`, `url_pago`, `fecha_creacion`, `fecha_actualizacion`) VALUES
-(8, 'Pizza de camarón', 'Salsa de tomate, queso mozzarella y camarón', 'Pizza', 1, 0, 'https://api.mamamianpizza.com/uploads/imagen-1750310646250-158034039.png', '', '2025-06-19 03:43:17', '2025-06-25 21:05:23'),
-(9, 'Pizza de curil', 'Salsa de tomate, queso mozzarella y curil', 'Recomendacion de la casa', 1, 1, 'https://api.mamamianpizza.com/uploads/imagen-1750310520016-805362257.png', '', '2025-06-19 03:43:17', '2025-06-29 13:36:29'),
-(10, 'Quesos Suprema', 'Salsa de tomate y mezcla de cuatro quesos.', 'Las mas Populares', 1, 1, 'https://api.mamamianpizza.com/uploads/imagen-1750311076277-433255140.png', '', '2025-06-19 03:43:17', '2025-06-19 05:31:42'),
-(11, 'Suprema Pizza', 'Salsa de tomate, queso mozzarella, pepperoni, jamón, salami, hongos, aceitunas y vegetales.', 'Pizza', 1, 0, 'https://api.mamamianpizza.com/uploads/imagen-1750311315161-775513065.png', '', '2025-06-19 03:43:17', '2025-06-25 21:05:38'),
-(12, 'Pepperoni Pizza', 'Salsa de tomate, queso mozzarella y rodajas de pepperoni.', 'Pizza', 1, 0, 'https://api.mamamianpizza.com/uploads/imagen-1750311403276-455206275.png', '', '2025-06-19 03:43:17', '2025-06-25 22:28:47'),
-(13, 'Hawaiana Pizza', 'Salsa de tomate, queso mozzarella, jamón y piña.', 'Recomendacion de la casa', 1, 1, 'https://api.mamamianpizza.com/uploads/imagen-1750311681859-187982278.png', '', '2025-06-19 03:43:17', '2025-06-25 22:48:15');
+INSERT INTO `productos` (`id_producto`, `titulo`, `descripcion`, `seccion`, `id_categoria`, `activo`, `imagen`, `fecha_creacion`, `fecha_actualizacion`) VALUES
+(8, 'Pizza de camarón', 'Salsa de tomate, queso mozzarella y camarón', 'Pizza', 1, 0, 'https://api.mamamianpizza.com/uploads/imagen-1750310646250-158034039.png', '2025-06-19 03:43:17', '2025-06-25 21:05:23'),
+(9, 'Pizza de curil', 'Salsa de tomate, queso mozzarella y curil', 'Recomendacion de la casa', 1, 1, 'https://api.mamamianpizza.com/uploads/imagen-1750310520016-805362257.png', '2025-06-19 03:43:17', '2025-06-29 13:36:29'),
+(10, 'Quesos Suprema', 'Salsa de tomate y mezcla de cuatro quesos.', 'Las mas Populares', 1, 1, 'https://api.mamamianpizza.com/uploads/imagen-1750311076277-433255140.png', '2025-06-19 03:43:17', '2025-06-19 05:31:42'),
+(11, 'Suprema Pizza', 'Salsa de tomate, queso mozzarella, pepperoni, jamón, salami, hongos, aceitunas y vegetales.', 'Pizza', 1, 0, 'https://api.mamamianpizza.com/uploads/imagen-1750311315161-775513065.png', '2025-06-19 03:43:17', '2025-06-25 21:05:38'),
+(12, 'Pepperoni Pizza', 'Salsa de tomate, queso mozzarella y rodajas de pepperoni.', 'Pizza', 1, 0, 'https://api.mamamianpizza.com/uploads/imagen-1750311403276-455206275.png', '2025-06-19 03:43:17', '2025-06-25 22:28:47'),
+(13, 'Hawaiana Pizza', 'Salsa de tomate, queso mozzarella, jamón y piña.', 'Recomendacion de la casa', 1, 1, 'https://api.mamamianpizza.com/uploads/imagen-1750311681859-187982278.png', '2025-06-19 03:43:17', '2025-06-25 22:48:15');
 
 -- --------------------------------------------------------
 
@@ -3320,7 +3330,7 @@ ALTER TABLE `ingredientes`
 -- AUTO_INCREMENT de la tabla `logs`
 --
 ALTER TABLE `logs`
-  MODIFY `id_log` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2235;
+  MODIFY `id_log` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2245;
 
 --
 -- AUTO_INCREMENT de la tabla `metodos_pago`
