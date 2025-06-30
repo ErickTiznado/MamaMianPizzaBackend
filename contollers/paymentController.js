@@ -180,16 +180,20 @@ exports.createPaymentTransaction = async (req, res) => {
 
 /**
  * Guardar transacción en la base de datos
+ * Usa los nombres de columnas exactos de la base de datos actual
  */
 async function saveTransaction(transactionData) {
     return new Promise((resolve, reject) => {
+        console.log('📊 Datos a guardar en transacción:', transactionData);
+        
+        // Usar los nombres de columnas exactos de tu base de datos
         const query = `
             INSERT INTO transacciones 
-            (url_pago, monto, email, nombre_cliente, telefono, direccion, descripcion, pedido_id, usuario_id, status, wompi_data, fecha_creacion)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            (url_pago, monto, email_cliente, nombre_cliente, telefono_cliente, direccion_cliente, descripcion, pedido_id, estado, response_wompi, fecha_creacion)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         `;
 
-        pool.query(query, [
+        const values = [
             transactionData.urlPago,
             transactionData.monto,
             transactionData.email,
@@ -198,14 +202,21 @@ async function saveTransaction(transactionData) {
             transactionData.direccion,
             transactionData.descripcion,
             transactionData.pedidoId,
-            transactionData.userId,
-            transactionData.status,
-            transactionData.wompiData
-        ], (err, result) => {
+            transactionData.status === 'completed' ? 'completado' : 
+            transactionData.status === 'pending' ? 'pendiente' : 
+            transactionData.status === 'failed' ? 'fallido' : 'pendiente',
+            JSON.stringify(transactionData.wompiData)
+        ];
+
+        console.log('🔧 Query SQL:', query);
+        console.log('📋 Valores:', values);
+
+        pool.query(query, values, (err, result) => {
             if (err) {
-                console.error('Error al guardar transacción:', err);
+                console.error('❌ Error al guardar transacción:', err);
                 reject(err);
             } else {
+                console.log('✅ Transacción guardada con ID:', result.insertId);
                 resolve(result.insertId);
             }
         });
