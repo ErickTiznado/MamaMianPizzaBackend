@@ -870,7 +870,7 @@ exports.processPaymentAndOrder = async (req, res) => {
         };
 
         console.log(`� [${requestId}] Datos del pedido guardados en transacción, se procesarán después de la confirmación de pago`);
-        console.log(`🔗 [${requestId}] Cliente debe completar el pago en: ${wompiResult.urlPago}`);
+        console.log(`🔗 [${requestId}] Cliente debe completar el pago en: ${transactionResult.urlPago}`);
         console.log(`↩️  [${requestId}] Después del pago, Wompi redirigirá a: ${process.env.WOMPI_REDIRECT_URL}`);
 
         // IMPORTANTE: NO crear el pedido aquí, solo guardamos los datos
@@ -890,7 +890,7 @@ exports.processPaymentAndOrder = async (req, res) => {
 
         // Log de éxito de preparación
         logAction(req, 'PAYMENT_PREPARED_SUCCESS', 'transacciones', 
-            `Pago preparado exitosamente - Transaction: ${transactionId}, Monto: $${monto}, URL: ${wompiResult.urlPago}`);
+            `Pago preparado exitosamente - Transaction: ${transactionId}, Monto: $${monto}, URL: ${transactionResult.urlPago}`);
 
         console.log(`🎉 [${requestId}] ===== TRANSACCIÓN PREPARADA EXITOSAMENTE =====`);
         console.log(`🔗 [${requestId}] Cliente debe completar el pago en Wompi`);
@@ -901,14 +901,14 @@ exports.processPaymentAndOrder = async (req, res) => {
             data: {
                 // Datos del pago
                 transactionId,
-                urlPago: wompiResult.urlPago,
+                urlPago: transactionResult.urlPago,
                 monto: parseFloat(monto),
                 metodoPago: 'tarjeta_credito',
                 
                 // Información para el frontend
                 instructions: {
                     message: 'Redirige al usuario a la URL de pago para completar la transacción 3DS',
-                    redirectUrl: wompiResult.urlPago,
+                    redirectUrl: transactionResult.urlPago,
                     returnUrl: process.env.WOMPI_REDIRECT_URL
                 },
                 
