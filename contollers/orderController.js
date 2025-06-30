@@ -2713,17 +2713,40 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
             id_usuario = cliente.id_usuario;
             console.log(`👤 [${requestId}] Usuario registrado: ${id_usuario}`);
         } else {
-            // Crear usuario invitado
-            console.log(`👤 [${requestId}] Creando usuario invitado...`);
+            // Manejar usuario invitado
+            console.log(`👤 [${requestId}] Procesando usuario invitado...`);
             
-            // Usar las columnas correctas de la tabla usuarios_invitados: nombre, apellido, celular
-            // Nota: esta tabla NO tiene email, solo celular
-            const [guestResult] = await connection.query(
-                'INSERT INTO usuarios_invitados (nombre, apellido, celular, fecha_creacion, ultimo_pedido) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
-                [cliente.nombre, cliente.apellido, cliente.telefono]
+            // Primero verificar si ya existe un usuario invitado con este celular
+            console.log(`🔍 [${requestId}] Verificando si ya existe usuario invitado con celular: ${cliente.telefono}`);
+            
+            const [existingGuest] = await connection.query(
+                'SELECT id_usuario_invitado, nombre, apellido FROM usuarios_invitados WHERE celular = ?',
+                [cliente.telefono]
             );
-            id_usuario_invitado = guestResult.insertId;
-            console.log(`✅ [${requestId}] Usuario invitado creado: ${id_usuario_invitado}`);
+            
+            if (existingGuest.length > 0) {
+                // Usuario invitado ya existe, usar el existente
+                id_usuario_invitado = existingGuest[0].id_usuario_invitado;
+                console.log(`✅ [${requestId}] Usuario invitado existente encontrado: ${id_usuario_invitado} - ${existingGuest[0].nombre} ${existingGuest[0].apellido}`);
+                
+                // Actualizar fecha del último pedido
+                await connection.query(
+                    'UPDATE usuarios_invitados SET ultimo_pedido = CURRENT_TIMESTAMP WHERE id_usuario_invitado = ?',
+                    [id_usuario_invitado]
+                );
+                console.log(`🔄 [${requestId}] Fecha de último pedido actualizada para usuario invitado: ${id_usuario_invitado}`);
+                
+            } else {
+                // Crear nuevo usuario invitado
+                console.log(`➕ [${requestId}] Creando nuevo usuario invitado...`);
+                
+                const [guestResult] = await connection.query(
+                    'INSERT INTO usuarios_invitados (nombre, apellido, celular, fecha_creacion, ultimo_pedido) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+                    [cliente.nombre, cliente.apellido, cliente.telefono]
+                );
+                id_usuario_invitado = guestResult.insertId;
+                console.log(`✅ [${requestId}] Nuevo usuario invitado creado: ${id_usuario_invitado}`);
+            }
         }
         
         // Manejar dirección
