@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const paymentController = require('../contollers/paymentController');
-const { verifyToken } = require('../contollers/authController');
-const { verifyAdminToken } = require('../contollers/authController');
+const { verifyToken, verifyAdminToken } = require('../contollers/authController');
 
 /**
  * @route POST /api/payments/create
@@ -27,6 +26,13 @@ router.post('/process-order', paymentController.processPaymentAndOrder);
 router.post('/test', paymentController.createTestTransaction);
 
 /**
+ * @route GET /api/payments/confirmation
+ * @desc Manejar la confirmación de pago desde Wompi
+ * @access Público (redirect desde Wompi)
+ */
+router.get('/confirmation', paymentController.handlePaymentConfirmation);
+
+/**
  * @route GET /api/payments
  * @desc Obtener todas las transacciones (solo administradores)
  * @access Privado - Solo administradores
@@ -46,12 +52,5 @@ router.get('/:id', verifyToken, paymentController.getTransaction);
  * @access Privado - Solo administradores o webhooks
  */
 router.put('/:id/status', paymentController.updateTransactionStatus);
-
-/**
- * @route GET /api/payments/confirmation
- * @desc Manejar la confirmación de pago desde Wompi
- * @access Público (redirect desde Wompi)
- */
-router.get('/confirmation', paymentController.handlePaymentConfirmation);
 
 module.exports = router;
