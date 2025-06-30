@@ -102,6 +102,7 @@ app.use('/api/account', accountRoutes); // Use account routes
 app.use('/api/segmentacion', segmentacionRoutes); // Use the new route for customer segmentation
 app.use('/api/logs', logsRoutes); // Use logs routes
 app.use('/api/act', activeRoutes); // Use activar usuarios routes
+app.use('/api/payments', require('./routes/paymentRoutes')); // Payment routes
 // Default route
 
 app.get('/', (req, res) => {
