@@ -180,84 +180,35 @@ exports.createPaymentTransaction = async (req, res) => {
 
 /**
  * Guardar transacción en la base de datos
- * Versión robusta que detecta automáticamente las columnas disponibles
  */
 async function saveTransaction(transactionData) {
-    return new Promise(async (resolve, reject) => {
-        try {
-            // Primero detectar qué columnas existen en la tabla
-            const columnsQuery = `
-                SELECT COLUMN_NAME 
-                FROM information_schema.columns 
-                WHERE table_schema = DATABASE() 
-                AND table_name = 'transacciones'
-            `;
-            
-            pool.query(columnsQuery, (err, columnsResult) => {
-                if (err) {
-                    console.error('❌ Error al obtener columnas de transacciones:', err);
-                    return reject(err);
-                }
-                
-                const availableColumns = columnsResult.map(row => row.COLUMN_NAME);
-                console.log('📋 Columnas disponibles en transacciones:', availableColumns);
-                
-                // Construir INSERT dinámicamente basado en columnas disponibles
-                const dataToInsert = {};
-                const potentialColumns = {
-                    'url_pago': transactionData.urlPago,
-                    'monto': transactionData.monto,
-                    'email': transactionData.email,
-                    'nombre_cliente': transactionData.nombre,
-                    'telefono': transactionData.telefono,
-                    'direccion': transactionData.direccion,
-                    'descripcion': transactionData.descripcion,
-                    'pedido_id': transactionData.pedidoId,
-                    'usuario_id': transactionData.userId,
-                    'status': transactionData.status,
-                    'wompi_data': JSON.stringify(transactionData.wompiData),
-                    'wompi_response': transactionData.wompiResponse ? JSON.stringify(transactionData.wompiResponse) : null
-                };
-                
-                // Solo incluir columnas que existen en la tabla
-                Object.keys(potentialColumns).forEach(column => {
-                    if (availableColumns.includes(column)) {
-                        dataToInsert[column] = potentialColumns[column];
-                    } else {
-                        console.log(`⚠️  Columna '${column}' no existe en la tabla, omitiendo...`);
-                    }
-                });
-                
-                // Construir query dinámicamente
-                const columns = Object.keys(dataToInsert);
-                columns.push('fecha_creacion');
-                
-                const placeholders = columns.map(col => col === 'fecha_creacion' ? 'NOW()' : '?').join(', ');
-                const values = columns.filter(col => col !== 'fecha_creacion').map(col => dataToInsert[col]);
-                
-                const query = `
-                    INSERT INTO transacciones (${columns.join(', ')})
-                    VALUES (${placeholders})
-                `;
-                
-                console.log('🔧 Query construido dinámicamente:', query);
-                console.log('📊 Valores a insertar:', values);
-                
-                pool.query(query, values, (insertErr, result) => {
-                    if (insertErr) {
-                        console.error('❌ Error al insertar transacción:', insertErr);
-                        return reject(insertErr);
-                    }
-                    
-                    console.log('✅ Transacción guardada con ID:', result.insertId);
-                    resolve(result.insertId);
-                });
-            });
-            
-        } catch (error) {
-            console.error('❌ Error general en saveTransaction:', error);
-            reject(error);
-        }
+    return new Promise((resolve, reject) => {
+        const query = `
+            INSERT INTO transacciones 
+            (url_pago, monto, email, nombre_cliente, telefono, direccion, descripcion, pedido_id, usuario_id, status, wompi_data, fecha_creacion)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        `;
+
+        pool.query(query, [
+            transactionData.urlPago,
+            transactionData.monto,
+            transactionData.email,
+            transactionData.nombre,
+            transactionData.telefono,
+            transactionData.direccion,
+            transactionData.descripcion,
+            transactionData.pedidoId,
+            transactionData.userId,
+            transactionData.status,
+            transactionData.wompiData
+        ], (err, result) => {
+            if (err) {
+                console.error('Error al guardar transacción:', err);
+                reject(err);
+            } else {
+                resolve(result.insertId);
+            }
+        });
     });
 }
 
