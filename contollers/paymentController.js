@@ -344,25 +344,153 @@ exports.updateTransactionStatus = (req, res) => {
 };
 
 /**
- * Endpoint para manejar la confirmación de pago (desde el redirect)
+ * Endpoint para manejar la confirmación de pago (desde el redirect de Wompi)
+ * URL de ejemplo: /api/payments/confirmation?idTransaccion=xxx&monto=4.00&esReal=True&formaPago=PagoNormal&esAprobada=False&codigoAutorizacion=&mensaje=Fondos+insuficientes&hash=xxx
  */
-exports.handlePaymentConfirmation = (req, res) => {
-    // Este endpoint recibirá los parámetros de confirmación de Wompi
-    const { transactionId, status, amount } = req.query;
-
-    console.log('📝 Confirmación de pago recibida:', {
-        transactionId,
-        status,
-        amount
-    });
-
-    // Aquí puedes actualizar el estado en tu base de datos
-    // y redirigir al usuario a una página de confirmación
-
-    if (status === 'success') {
-        res.redirect(`https://mamamianpizza.com/pago-exitoso?transaction=${transactionId}&amount=${amount}`);
-    } else {
-        res.redirect(`https://mamamianpizza.com/pago-fallido?transaction=${transactionId}`);
+exports.handlePaymentConfirmation = async (req, res) => {
+    const requestId = `CONFIRMATION-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    let connection;
+    
+    console.log(`\n[${new Date().toISOString()}] ===== CONFIRMACIÓN DE PAGO WOMPI =====`);
+    console.log(`🆔 Request ID: ${requestId}`);
+    console.log(`📋 Query params:`, req.query);
+    
+    try {
+        const {
+            idTransaccion,
+            monto,
+            esReal,
+            formaPago,
+            esAprobada,
+            codigoAutorizacion,
+            mensaje,
+            hash
+        } = req.query;
+        
+        console.log(`💳 [${requestId}] Datos de confirmación:`);
+        console.log(`🆔 [${requestId}] ID Transacción: ${idTransaccion}`);
+        console.log(`💰 [${requestId}] Monto: $${monto}`);
+        console.log(`✅ [${requestId}] Es Aprobada: ${esAprobada}`);
+        console.log(`🔧 [${requestId}] Código Autorización: ${codigoAutorizacion || 'N/A'}`);
+        console.log(`📝 [${requestId}] Mensaje: ${decodeURIComponent(mensaje || '')}`);
+        
+        // Buscar la transacción en nuestra base de datos
+        console.log(`🔍 [${requestId}] Buscando transacción en base de datos...`);
+        
+        connection = await pool.getConnection();
+        
+        const [transactionRows] = await connection.query(
+            'SELECT * FROM transacciones WHERE response_wompi LIKE ? OR url_pago LIKE ?',
+            [`%${idTransaccion}%`, `%${idTransaccion}%`]
+        );
+        
+        if (transactionRows.length === 0) {
+            console.error(`❌ [${requestId}] Transacción no encontrada para ID: ${idTransaccion}`);
+            return res.redirect(`https://mamamianpizza.com/pago-error?message=Transaccion+no+encontrada`);
+        }
+        
+        const transaction = transactionRows[0];
+        console.log(`✅ [${requestId}] Transacción encontrada: ID ${transaction.id}`);
+        
+        // Actualizar la transacción con la respuesta de Wompi
+        const wompiResponse = {
+            idTransaccion,
+            monto: parseFloat(monto),
+            esReal: esReal === 'True',
+            formaPago,
+            esAprobada: esAprobada === 'True',
+            codigoAutorizacion: codigoAutorizacion || null,
+            mensaje: decodeURIComponent(mensaje || ''),
+            hash,
+            fechaRespuesta: new Date().toISOString()
+        };
+        
+        const nuevoEstado = esAprobada === 'True' ? 'completado' : 'fallido';
+        
+        console.log(`🔄 [${requestId}] Actualizando estado de transacción a: ${nuevoEstado}`);
+        
+        await connection.query(
+            'UPDATE transacciones SET estado = ?, response_wompi = ?, fecha_actualizacion = NOW() WHERE id = ?',
+            [nuevoEstado, JSON.stringify(wompiResponse), transaction.id]
+        );
+        
+        if (esAprobada === 'True') {
+            console.log(`🎉 [${requestId}] ===== PAGO APROBADO =====`);
+            console.log(`💰 [${requestId}] Monto: $${monto}`);
+            console.log(`🔐 [${requestId}] Código autorización: ${codigoAutorizacion}`);
+            
+            // AQUÍ ES DONDE CREAMOS EL PEDIDO
+            console.log(`🛒 [${requestId}] Creando pedido automáticamente...`);
+            
+            // Recuperar los datos del pedido guardados en la descripción
+            let pedidoData;
+            try {
+                const descripcion = transaction.descripcion || '';
+                if (descripcion.includes('Datos del pedido:')) {
+                    const jsonStr = descripcion.split('Datos del pedido:')[1].trim();
+                    pedidoData = JSON.parse(jsonStr);
+                    console.log(`📋 [${requestId}] Datos del pedido recuperados exitosamente`);
+                } else {
+                    throw new Error('Datos del pedido no encontrados en la transacción');
+                }
+            } catch (error) {
+                console.error(`❌ [${requestId}] Error al recuperar datos del pedido:`, error.message);
+                return res.redirect(`https://mamamianpizza.com/pago-error?message=Error+al+procesar+pedido`);
+            }
+            
+            // Crear el pedido usando el orderController
+            const orderController = require('./orderController');
+            const orderResult = await orderController.createOrderFromPayment(pedidoData, transaction.id);
+            
+            if (orderResult.success) {
+                console.log(`✅ [${requestId}] Pedido creado exitosamente: ${orderResult.data.codigo_pedido}`);
+                
+                // Actualizar la transacción con el ID del pedido
+                await connection.query(
+                    'UPDATE transacciones SET pedido_id = ? WHERE id = ?',
+                    [orderResult.data.id_pedido, transaction.id]
+                );
+                
+                // Log de éxito completo
+                logAction({ user: null }, 'PAYMENT_CONFIRMED_SUCCESS', 'transacciones,pedidos', 
+                    `Pago confirmado y pedido creado - Transaction: ${transaction.id}, Pedido: ${orderResult.data.codigo_pedido}, Monto: $${monto}`);
+                
+                console.log(`🎉 [${requestId}] ===== PROCESO COMPLETADO EXITOSAMENTE =====`);
+                
+                // Redirigir a página de éxito con información del pedido
+                return res.redirect(`https://mamamianpizza.com/pago-exitoso?transaction=${transaction.id}&pedido=${orderResult.data.codigo_pedido}&monto=${monto}`);
+                
+            } else {
+                console.error(`❌ [${requestId}] Error al crear pedido:`, orderResult.error);
+                logAction({ user: null }, 'PAYMENT_CONFIRMED_ORDER_ERROR', 'transacciones', 
+                    `Pago confirmado pero error al crear pedido - Transaction: ${transaction.id}, Error: ${orderResult.error}`);
+                
+                return res.redirect(`https://mamamianpizza.com/pago-error?message=Error+al+crear+pedido`);
+            }
+            
+        } else {
+            console.log(`❌ [${requestId}] ===== PAGO RECHAZADO =====`);
+            console.log(`💔 [${requestId}] Motivo: ${decodeURIComponent(mensaje || 'Pago no aprobado')}`);
+            
+            logAction({ user: null }, 'PAYMENT_REJECTED', 'transacciones', 
+                `Pago rechazado - Transaction: ${transaction.id}, Motivo: ${mensaje}`);
+            
+            return res.redirect(`https://mamamianpizza.com/pago-fallido?transaction=${transaction.id}&mensaje=${encodeURIComponent(mensaje || 'Pago no aprobado')}`);
+        }
+        
+    } catch (error) {
+        console.error(`❌ [${requestId}] Error en handlePaymentConfirmation:`, error);
+        
+        logAction({ user: null }, 'PAYMENT_CONFIRMATION_ERROR', 'transacciones', 
+            `Error en confirmación de pago: ${error.message}`);
+        
+        return res.redirect(`https://mamamianpizza.com/pago-error?message=Error+interno`);
+        
+    } finally {
+        if (connection) {
+            connection.release();
+            console.log(`🔗 [${requestId}] Conexión liberada`);
+        }
     }
 };
 
@@ -728,11 +856,10 @@ exports.processPaymentAndOrder = async (req, res) => {
 
         console.log(`✅ [${requestId}] Transacción guardada con ID: ${transactionId}`);
 
-        // Preparar datos del pedido para que incluyan el método de pago
+        // Guardar datos del pedido en la transacción para procesarlos después de la confirmación
         const pedidoDataCompleto = {
             ...pedidoData,
             metodo_pago: 'tarjeta_credito',
-            // Asegurar que el cliente tenga los datos del pago si no están
             cliente: {
                 ...pedidoData.cliente,
                 nombre: pedidoData.cliente?.nombre || nombre,
@@ -742,56 +869,51 @@ exports.processPaymentAndOrder = async (req, res) => {
             }
         };
 
-        console.log(`🛒 [${requestId}] Creando pedido automáticamente...`);
+        console.log(`� [${requestId}] Datos del pedido guardados en transacción, se procesarán después de la confirmación de pago`);
+        console.log(`🔗 [${requestId}] Cliente debe completar el pago en: ${wompiResult.urlPago}`);
+        console.log(`↩️  [${requestId}] Después del pago, Wompi redirigirá a: ${process.env.WOMPI_REDIRECT_URL}`);
 
-        // Crear el pedido automáticamente en estado 'en proceso'
-        const orderResult = await orderController.createOrderFromPayment(pedidoDataCompleto, transactionId);
+        // IMPORTANTE: NO crear el pedido aquí, solo guardamos los datos
+        // El pedido se creará en el endpoint /confirmacion cuando el pago sea exitoso
+        
+        console.log(`✅ [${requestId}] Transacción preparada exitosamente`);
+        console.log(`🎯 [${requestId}] Estado: Esperando confirmación de pago`);
 
-        if (!orderResult.success) {
-            throw new Error('Error al crear el pedido después del pago exitoso');
-        }
-
-        console.log(`✅ [${requestId}] Pedido creado exitosamente: ${orderResult.data.codigo_pedido}`);
-
-        // Actualizar la transacción con el ID del pedido
+        // Actualizar la transacción con los datos del pedido para usar después
         await connection.query(
-            'UPDATE transacciones SET pedido_id = ?, fecha_actualizacion = NOW() WHERE id = ?',
-            [orderResult.data.id_pedido, transactionId]
+            'UPDATE transacciones SET descripcion = ? WHERE id = ?',
+            [`Datos del pedido: ${JSON.stringify(pedidoDataCompleto)}`, transactionId]
         );
 
-        console.log(`✅ [${requestId}] Transacción vinculada con pedido`);
-
-        // Confirmar toda la transacción
+        // Confirmar la transacción (solo la transacción, no el pedido)
         await connection.commit();
 
-        // Log de éxito completo
-        logAction(req, 'PAYMENT_ORDER_SUCCESS', 'transacciones,pedidos', 
-            `Pago y pedido creados exitosamente - Transaction: ${transactionId}, Pedido: ${orderResult.data.codigo_pedido}, Monto: $${monto}`);
+        // Log de éxito de preparación
+        logAction(req, 'PAYMENT_PREPARED_SUCCESS', 'transacciones', 
+            `Pago preparado exitosamente - Transaction: ${transactionId}, Monto: $${monto}, URL: ${wompiResult.urlPago}`);
 
-        console.log(`🎉 [${requestId}] ===== PROCESO COMPLETADO EXITOSAMENTE =====`);
+        console.log(`🎉 [${requestId}] ===== TRANSACCIÓN PREPARADA EXITOSAMENTE =====`);
+        console.log(`🔗 [${requestId}] Cliente debe completar el pago en Wompi`);
 
         res.status(201).json({
             success: true,
-            message: 'Pago procesado y pedido creado exitosamente',
+            message: 'Transacción de pago creada exitosamente. Redirige al usuario a la URL de pago.',
             data: {
                 // Datos del pago
                 transactionId,
-                urlPago: transactionResult.urlPago,
+                urlPago: wompiResult.urlPago,
                 monto: parseFloat(monto),
                 metodoPago: 'tarjeta_credito',
                 
-                // Datos del pedido
-                pedido: {
-                    id: orderResult.data.id_pedido,
-                    codigo: orderResult.data.codigo_pedido,
-                    estado: orderResult.data.estado, // 'en proceso'
-                    total: orderResult.data.total,
-                    productos_count: orderResult.data.productos_count
+                // Información para el frontend
+                instructions: {
+                    message: 'Redirige al usuario a la URL de pago para completar la transacción 3DS',
+                    redirectUrl: wompiResult.urlPago,
+                    returnUrl: process.env.WOMPI_REDIRECT_URL
                 },
                 
-                // Información de seguimiento
-                processingTime: orderResult.data.processing_time_ms,
-                message: 'El pedido ha sido enviado automáticamente a cocina y está en proceso'
+                // El pedido se creará DESPUÉS de la confirmación de pago
+                pedidoStatus: 'PENDIENTE_CONFIRMACION_PAGO'
             }
         });
 
