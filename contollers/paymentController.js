@@ -552,7 +552,13 @@ exports.processPaymentAndOrder = async (req, res) => {
     
     console.log(`\n[${new Date().toISOString()}] ===== INICIO PROCESO PAGO + PEDIDO =====`);
     console.log(`🆔 Request ID: ${requestId}`);
-    console.log(`📝 Body completo:`, JSON.stringify(req.body, null, 2));
+    console.log(`🌐 [${requestId}] Método: ${req.method}`);
+    console.log(`🔗 [${requestId}] URL: ${req.originalUrl}`);
+    console.log(`📋 [${requestId}] Headers:`, req.headers);
+    console.log(`📦 [${requestId}] Body tipo:`, typeof req.body);
+    console.log(`� [${requestId}] Body está vacío:`, Object.keys(req.body).length === 0);
+    console.log(`�📝 [${requestId}] Body completo:`, JSON.stringify(req.body, null, 2));
+    console.log(`✅ [${requestId}] ENDPOINT ALCANZADO CORRECTAMENTE`);
     
     try {
         console.log(`🔍 [${requestId}] Analizando formato de datos recibidos...`);
