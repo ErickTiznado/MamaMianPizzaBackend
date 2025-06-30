@@ -4,6 +4,13 @@ const paymentController = require('../contollers/paymentController');
 const { verifyAdminToken } = require('../contollers/authController');
 
 /**
+ * @route POST /api/payments/debug
+ * @desc Endpoint de debug para analizar datos del frontend
+ * @access Público (solo para desarrollo)
+ */
+router.post('/debug', paymentController.debugPaymentData);
+
+/**
  * @route POST /api/payments/create
  * @desc Crear una nueva transacción de pago
  * @access Público (puede requerir token dependiendo de tu implementación)

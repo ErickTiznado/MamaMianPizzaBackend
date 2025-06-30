@@ -416,36 +416,135 @@ exports.processPaymentAndOrder = async (req, res) => {
     console.log(`📝 Body completo:`, JSON.stringify(req.body, null, 2));
     
     try {
+        console.log(`🔍 [${requestId}] Analizando formato de datos recibidos...`);
+        
+        // Detectar si viene en formato nuevo (con pedidoData) o formato directo
+        let datosNormalizados;
+        
+        if (req.body.pedidoData) {
+            console.log(`📋 [${requestId}] Formato detectado: NUEVO (con pedidoData)`);
+            datosNormalizados = req.body;
+        } else if (req.body.cliente && req.body.tarjeta && req.body.productos) {
+            console.log(`📋 [${requestId}] Formato detectado: DIRECTO (frontend simplificado)`);
+            console.log(`🔄 [${requestId}] Adaptando formato directo a formato interno...`);
+            
+            // Adaptar formato directo al formato esperado
+            datosNormalizados = {
+                // Datos de la tarjeta del formato directo
+                numeroTarjeta: req.body.tarjeta.numeroTarjeta,
+                cvv: req.body.tarjeta.cvv,
+                mesVencimiento: req.body.tarjeta.mesVencimiento,
+                anioVencimiento: req.body.tarjeta.anioVencimiento,
+                
+                // Datos del cliente para pago
+                nombre: req.body.cliente.nombre.split(' ')[0] || req.body.cliente.nombre,
+                apellido: req.body.cliente.nombre.split(' ').slice(1).join(' ') || 'Cliente',
+                email: req.body.cliente.email,
+                telefono: req.body.cliente.telefono,
+                direccionPago: req.body.cliente.direccion,
+                ciudad: 'San Salvador',
+                idPais: 'SV',
+                idRegion: 'SV-SS',
+                codigoPostal: '1101',
+                
+                // Construir pedidoData desde el formato directo
+                pedidoData: {
+                    tipo_cliente: 'invitado',
+                    cliente: {
+                        nombre: req.body.cliente.nombre.split(' ')[0] || req.body.cliente.nombre,
+                        apellido: req.body.cliente.nombre.split(' ').slice(1).join(' ') || 'Cliente',
+                        telefono: req.body.cliente.telefono,
+                        email: req.body.cliente.email
+                    },
+                    direccion: {
+                        tipo_direccion: 'formulario',
+                        direccion: req.body.cliente.direccion,
+                        pais: 'El Salvador',
+                        departamento: 'San Salvador',
+                        municipio: 'San Salvador',
+                        codigo_postal: '1101',
+                        instrucciones_entrega: req.body.observaciones_generales || null
+                    },
+                    productos: req.body.productos.map(producto => ({
+                        id_producto: producto.id_producto,
+                        nombre_producto: `Producto ID ${producto.id_producto}`,
+                        cantidad: producto.cantidad,
+                        precio_unitario: producto.precio_unitario,
+                        subtotal: producto.cantidad * producto.precio_unitario,
+                        masa: producto.observaciones?.includes('Masa:') ? 
+                              producto.observaciones.split('Masa:')[1]?.split(',')[0]?.trim() : null,
+                        tamano: producto.observaciones?.includes('Tamaño:') ? 
+                               producto.observaciones.split('Tamaño:')[1]?.trim() : null,
+                        instrucciones_especiales: producto.observaciones || null
+                    })),
+                    subtotal: req.body.productos.reduce((sum, p) => sum + (p.cantidad * p.precio_unitario), 0),
+                    costo_envio: req.body.tipo_entrega === 'domicilio' ? 2.50 : 0,
+                    impuestos: 0,
+                    total: req.body.productos.reduce((sum, p) => sum + (p.cantidad * p.precio_unitario), 0) + 
+                           (req.body.tipo_entrega === 'domicilio' ? 2.50 : 0) - 
+                           (req.body.descuento || 0),
+                    aceptado_terminos: true,
+                    tiempo_estimado_entrega: req.body.tipo_entrega === 'domicilio' ? 45 : 15
+                }
+            };
+            
+            console.log(`✅ [${requestId}] Datos adaptados correctamente`);
+            console.log(`📊 [${requestId}] Total calculado: $${datosNormalizados.pedidoData.total}`);
+            console.log(`🛍️ [${requestId}] Productos adaptados: ${datosNormalizados.pedidoData.productos.length} items`);
+            
+        } else {
+            console.error(`❌ [${requestId}] Formato de datos no reconocido`);
+            console.error(`🔍 [${requestId}] Campos recibidos:`, Object.keys(req.body));
+            
+            return res.status(400).json({
+                success: false,
+                message: 'Formato de datos no válido',
+                error: 'Se esperaba formato con pedidoData o formato directo con cliente/tarjeta/productos',
+                formatosValidos: {
+                    nuevo: { pedidoData: '{ cliente, direccion, productos, etc. }' },
+                    directo: { cliente: '{}', tarjeta: '{}', productos: '[]' }
+                },
+                camposRecibidos: Object.keys(req.body)
+            });
+        }
+
         const {
-            // Datos de la tarjeta
             numeroTarjeta,
             cvv,
             mesVencimiento,
             anioVencimiento,
-            
-            // Datos del cliente
             nombre,
             apellido,
             email,
             telefono,
-            
-            // Datos de dirección para pago
             direccionPago,
             ciudad,
             idPais,
             idRegion,
             codigoPostal,
-            
-            // Datos del pedido completo
-            pedidoData // Este objeto debe contener: tipo_cliente, cliente, direccion, productos, subtotal, total, etc.
-        } = req.body;
+            pedidoData
+        } = datosNormalizados;
+
+        console.log(`📋 [${requestId}] Datos normalizados para procesamiento:`);
+        console.log(`👤 [${requestId}] Cliente: ${nombre} ${apellido} (${email})`);
+        console.log(`💳 [${requestId}] Tarjeta: ****-****-****-${numeroTarjeta.slice(-4)}`);
+        console.log(`🛍️ [${requestId}] Productos: ${pedidoData.productos.length} items`);
+        console.log(`💰 [${requestId}] Total: $${pedidoData.total}`);
 
         // Validar que tenemos todos los datos necesarios
         if (!pedidoData || !pedidoData.productos || !Array.isArray(pedidoData.productos) || pedidoData.productos.length === 0) {
+            console.error(`❌ [${requestId}] Validación fallida - pedidoData incompleto`);
+            console.error(`🔍 [${requestId}] pedidoData:`, pedidoData);
+            
             return res.status(400).json({
                 success: false,
-                message: 'Datos del pedido incompletos',
-                error: 'El campo pedidoData debe contener al menos: productos (array), total, cliente, direccion'
+                message: 'Datos del pedido incompletos después de normalización',
+                error: 'El pedidoData normalizado no contiene productos válidos',
+                debug: {
+                    tieneProductos: !!pedidoData?.productos,
+                    esArray: Array.isArray(pedidoData?.productos),
+                    cantidad: pedidoData?.productos?.length || 0
+                }
             });
         }
 
@@ -674,4 +773,57 @@ exports.processPaymentAndOrder = async (req, res) => {
             console.log(`🔗 [${requestId}] Conexión liberada`);
         }
     }
+};
+
+/**
+ * Endpoint de debug para analizar el formato de datos del frontend
+ */
+exports.debugPaymentData = (req, res) => {
+    const requestId = `DEBUG-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    
+    console.log(`\n🔍 [${requestId}] ===== DEBUG DATOS DEL FRONTEND =====`);
+    console.log(`📋 [${requestId}] Headers:`, req.headers);
+    console.log(`📦 [${requestId}] Body completo:`, JSON.stringify(req.body, null, 2));
+    console.log(`🔑 [${requestId}] Campos principales:`, Object.keys(req.body));
+    
+    // Analizar estructura
+    const analisis = {
+        tieneCliente: !!req.body.cliente,
+        tieneTarjeta: !!req.body.tarjeta,
+        tieneProductos: !!req.body.productos,
+        tienePedidoData: !!req.body.pedidoData,
+        formatoDetectado: 'desconocido'
+    };
+    
+    if (req.body.pedidoData) {
+        analisis.formatoDetectado = 'formato_nuevo_con_pedidoData';
+    } else if (req.body.cliente && req.body.tarjeta && req.body.productos) {
+        analisis.formatoDetectado = 'formato_directo_frontend';
+    }
+    
+    console.log(`📊 [${requestId}] Análisis:`, analisis);
+    
+    if (req.body.productos && Array.isArray(req.body.productos)) {
+        console.log(`🛍️ [${requestId}] Productos (${req.body.productos.length}):`);
+        req.body.productos.forEach((producto, index) => {
+            console.log(`   ${index + 1}. ID: ${producto.id_producto}, Cantidad: ${producto.cantidad}, Precio: $${producto.precio_unitario}`);
+        });
+        
+        const totalCalculado = req.body.productos.reduce((sum, p) => sum + (p.cantidad * p.precio_unitario), 0);
+        console.log(`💰 [${requestId}] Total calculado: $${totalCalculado}`);
+    }
+    
+    res.json({
+        success: true,
+        message: 'Datos recibidos correctamente',
+        requestId,
+        analisis,
+        datosRecibidos: req.body,
+        sugerencias: {
+            formatoActual: analisis.formatoDetectado,
+            endpointRecomendado: analisis.formatoDetectado === 'formato_directo_frontend' 
+                ? '/api/payments/process-order (ya adaptado)' 
+                : '/api/payments/process-order (formato original)'
+        }
+    });
 };
