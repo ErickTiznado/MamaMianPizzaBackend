@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const paymentController = require('../contollers/paymentController');
-const { verifyToken, verifyAdminToken } = require('../contollers/authController');
+const { verifyAdminToken } = require('../contollers/authController');
 
 /**
  * @route POST /api/payments/create
@@ -42,9 +42,9 @@ router.get('/', verifyAdminToken, paymentController.getAllTransactions);
 /**
  * @route GET /api/payments/:id
  * @desc Obtener una transacción específica
- * @access Privado - Usuario propietario o administrador
+ * @access Público (sin token por ahora)
  */
-router.get('/:id', verifyToken, paymentController.getTransaction);
+router.get('/:id', paymentController.getTransaction);
 
 /**
  * @route PUT /api/payments/:id/status
