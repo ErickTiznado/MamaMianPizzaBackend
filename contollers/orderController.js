@@ -2715,10 +2715,12 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
         } else {
             // Crear usuario invitado
             console.log(`👤 [${requestId}] Creando usuario invitado...`);
+            
+            // Usar las columnas correctas de la tabla usuarios_invitados: nombre, apellido, celular
+            // Nota: esta tabla NO tiene email, solo celular
             const [guestResult] = await connection.query(
-                'INSERT INTO usuarios_invitados (nombre, apellido, telefono, email) VALUES (?, ?, ?, ?)',
-
-                [cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null]
+                'INSERT INTO usuarios_invitados (nombre, apellido, celular, fecha_creacion, ultimo_pedido) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+                [cliente.nombre, cliente.apellido, cliente.telefono]
             );
             id_usuario_invitado = guestResult.insertId;
             console.log(`✅ [${requestId}] Usuario invitado creado: ${id_usuario_invitado}`);

@@ -439,6 +439,46 @@ exports.processPaymentAndOrder = async (req, res) => {
             console.log(`📋 [${requestId}] Formato detectado: DIRECTO (frontend simplificado)`);
             console.log(`🔄 [${requestId}] Adaptando formato directo a formato interno...`);
             
+            // Verificar si el usuario está registrado
+            console.log(`🔍 [${requestId}] Verificando tipo de usuario...`);
+            
+            let tipoCliente = 'invitado';
+            let idUsuario = null;
+            
+            // 1. Verificar si viene un id_usuario en los datos
+            if (req.body.id_usuario || req.body.cliente.id_usuario) {
+                idUsuario = req.body.id_usuario || req.body.cliente.id_usuario;
+                tipoCliente = 'registrado';
+                console.log(`👤 [${requestId}] Usuario registrado detectado por ID: ${idUsuario}`);
+            } 
+            // 2. Si no viene ID, buscar por email en la base de datos
+            else if (req.body.cliente.email) {
+                console.log(`🔍 [${requestId}] Buscando usuario por email: ${req.body.cliente.email}`);
+                
+                try {
+                    // Buscar usuario registrado por email
+                    const userCheckQuery = 'SELECT id_usuario, nombre, apellido FROM usuarios WHERE correo = ? AND activo = 1';
+                    const [userResult] = await new Promise((resolve, reject) => {
+                        pool.query(userCheckQuery, [req.body.cliente.email], (err, result) => {
+                            if (err) reject(err);
+                            else resolve([result]);
+                        });
+                    });
+                    
+                    if (userResult && userResult.length > 0) {
+                        idUsuario = userResult[0].id_usuario;
+                        tipoCliente = 'registrado';
+                        console.log(`✅ [${requestId}] Usuario registrado encontrado: ID ${idUsuario} - ${userResult[0].nombre} ${userResult[0].apellido}`);
+                    } else {
+                        console.log(`❌ [${requestId}] Usuario no encontrado en base de datos, será tratado como invitado`);
+                    }
+                } catch (error) {
+                    console.error(`⚠️ [${requestId}] Error al buscar usuario, continuando como invitado:`, error.message);
+                }
+            }
+            
+            console.log(`📋 [${requestId}] Tipo de cliente determinado: ${tipoCliente}${idUsuario ? ` (ID: ${idUsuario})` : ''}`);
+            
             // Adaptar formato directo al formato esperado
             datosNormalizados = {
                 // Datos de la tarjeta del formato directo
@@ -460,8 +500,9 @@ exports.processPaymentAndOrder = async (req, res) => {
                 
                 // Construir pedidoData desde el formato directo
                 pedidoData: {
-                    tipo_cliente: 'invitado',
+                    tipo_cliente: tipoCliente,
                     cliente: {
+                        id_usuario: idUsuario, // Agregar ID si existe
                         nombre: req.body.cliente.nombre.split(' ')[0] || req.body.cliente.nombre,
                         apellido: req.body.cliente.nombre.split(' ').slice(1).join(' ') || 'Cliente',
                         telefono: req.body.cliente.telefono,

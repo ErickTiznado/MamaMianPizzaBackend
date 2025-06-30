@@ -457,3 +457,43 @@ Vencimiento: 12/2029
 ```bash
 curl -X POST https://api.mamamianpizza.com/api/payments/test
 ```
+
+## 🔄 **Detección Automática de Usuarios Registrados**
+
+El sistema detecta automáticamente si un usuario está registrado de las siguientes maneras:
+
+### 1. **Por ID de Usuario (Recomendado)**
+Si el frontend tiene el ID del usuario autenticado:
+
+```json
+{
+  "id_usuario": 123,  // ID del usuario registrado
+  "cliente": {
+    "nombre": "Juan Pérez",
+    "telefono": "70123456",
+    "email": "juan@email.com",
+    "direccion": "Calle 123, San Salvador"
+  },
+  // ...resto de datos
+}
+```
+
+### 2. **Por Email (Automático)**
+Si no se envía `id_usuario`, el sistema busca automáticamente por email:
+
+```json
+{
+  "cliente": {
+    "nombre": "Juan Pérez",
+    "telefono": "70123456", 
+    "email": "juan@email.com",  // El sistema busca este email en usuarios registrados
+    "direccion": "Calle 123, San Salvador"
+  },
+  // ...resto de datos
+}
+```
+
+### 3. **Como Invitado**
+Si no se encuentra el usuario, se trata como invitado automáticamente.
+
+**Resultado:** El pedido se crea con el `tipo_cliente` correcto y se vincula al usuario registrado si existe
