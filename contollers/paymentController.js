@@ -895,7 +895,8 @@ exports.processPaymentAndOrder = async (req, res) => {
         console.log(`🎉 [${requestId}] ===== TRANSACCIÓN PREPARADA EXITOSAMENTE =====`);
         console.log(`🔗 [${requestId}] Cliente debe completar el pago en Wompi`);
 
-        res.status(201).json({
+        // Preparar la respuesta para el frontend
+        const responseData = {
             success: true,
             message: 'Transacción de pago creada exitosamente. Redirige al usuario a la URL de pago.',
             data: {
@@ -909,13 +910,31 @@ exports.processPaymentAndOrder = async (req, res) => {
                 instructions: {
                     message: 'Redirige al usuario a la URL de pago para completar la transacción 3DS',
                     redirectUrl: transactionResult.urlPago,
-                    returnUrl: process.env.WOMPI_REDIRECT_URL
+                    returnUrl: process.env.WOMPI_REDIRECT_URL || 'https://mamamianpizza.com/confirmacion'
                 },
                 
                 // El pedido se creará DESPUÉS de la confirmación de pago
                 pedidoStatus: 'PENDIENTE_CONFIRMACION_PAGO'
             }
-        });
+        };
+
+        // LOG DETALLADO PARA EL FRONTEND
+        console.log(`📋 [${requestId}] ===== RESPUESTA PARA EL FRONTEND =====`);
+        console.log(`📦 [${requestId}] Status Code: 201`);
+        console.log(`📦 [${requestId}] Content-Type: application/json`);
+        console.log(`📦 [${requestId}] Response Body:`);
+        console.log(JSON.stringify(responseData, null, 2));
+        console.log(`📋 [${requestId}] ===== DATOS CLAVE PARA EL FRONTEND =====`);
+        console.log(`✅ [${requestId}] success: ${responseData.success}`);
+        console.log(`🔗 [${requestId}] urlPago: ${responseData.data.urlPago}`);
+        console.log(`💰 [${requestId}] monto: ${responseData.data.monto}`);
+        console.log(`🆔 [${requestId}] transactionId: ${responseData.data.transactionId}`);
+        console.log(`🔄 [${requestId}] redirectUrl: ${responseData.data.instructions.redirectUrl}`);
+        console.log(`↩️  [${requestId}] returnUrl: ${responseData.data.instructions.returnUrl}`);
+        console.log(`📊 [${requestId}] pedidoStatus: ${responseData.data.pedidoStatus}`);
+        console.log(`📋 [${requestId}] ===== FIN RESPUESTA FRONTEND =====`);
+
+        res.status(201).json(responseData);
 
     } catch (error) {
         console.error(`❌ [${requestId}] Error en processPaymentAndOrder:`, error);
@@ -934,12 +953,28 @@ exports.processPaymentAndOrder = async (req, res) => {
         logAction(req, 'PAYMENT_ORDER_ERROR', 'transacciones,pedidos', 
             `Error en proceso de pago y pedido: ${error.message}`);
 
-        res.status(500).json({
+        // Preparar respuesta de error para el frontend
+        const errorResponse = {
             success: false,
             message: 'Error interno del servidor',
             error: process.env.NODE_ENV === 'development' ? error.message : 'Error interno',
             requestId
-        });
+        };
+
+        // LOG DETALLADO DEL ERROR PARA EL FRONTEND
+        console.log(`📋 [${requestId}] ===== RESPUESTA DE ERROR PARA EL FRONTEND =====`);
+        console.log(`📦 [${requestId}] Status Code: 500`);
+        console.log(`📦 [${requestId}] Content-Type: application/json`);
+        console.log(`📦 [${requestId}] Error Response Body:`);
+        console.log(JSON.stringify(errorResponse, null, 2));
+        console.log(`📋 [${requestId}] ===== DATOS CLAVE DEL ERROR =====`);
+        console.log(`❌ [${requestId}] success: ${errorResponse.success}`);
+        console.log(`💬 [${requestId}] message: ${errorResponse.message}`);
+        console.log(`🔍 [${requestId}] error: ${errorResponse.error}`);
+        console.log(`🆔 [${requestId}] requestId: ${errorResponse.requestId}`);
+        console.log(`📋 [${requestId}] ===== FIN RESPUESTA ERROR FRONTEND =====`);
+
+        res.status(500).json(errorResponse);
         
     } finally {
         if (connection) {
