@@ -795,9 +795,6 @@ exports.createOrder = async (req, res) => {
             });
         }
         
-        // Update the payment method to use the normalized version
-        metodo_pago = metodoPagoNormalizado;
-        
         console.log(`✅ [${requestId}] Método de pago validado correctamente`);        // Validate numeric fields
         console.log(`🔢 [${requestId}] Validando campos numéricos...`);
         if (isNaN(total) || total <= 0) {
@@ -978,14 +975,14 @@ exports.createOrder = async (req, res) => {
         
         // Determine initial order status based on payment method
         let estadoInicial = 'pendiente'; // Default for cash payments
-        if (metodo_pago === 'tarjeta_credito') {
+        if (metodoPagoNormalizado === 'tarjeta_credito') {
             estadoInicial = 'pendiente_pago'; // Card payments need payment processing
             console.log(`💳 [${requestId}] Pago con tarjeta detectado, estado inicial: 'pendiente_pago'`);
         }
         
         const orderInsertValues = [
             codigo_pedido, id_usuario, id_direccion, estadoInicial, total, tipo_cliente, 
-            metodo_pago, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
+            metodoPagoNormalizado, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
             subtotal, costo_envio, aceptado_terminos ? 1 : 0, tiempo_estimado_entrega
         ];
 
@@ -1012,7 +1009,7 @@ exports.createOrder = async (req, res) => {
         console.log(`🔖 [${requestId}] Código del pedido: ${codigo_pedido}`);
         console.log(`👤 [${requestId}] Tipo de cliente: ${tipo_cliente}`);
         console.log(`💰 [${requestId}] Total del pedido: $${total}`);
-        console.log(`💳 [${requestId}] Método de pago: ${metodo_pago}`);
+        console.log(`💳 [${requestId}] Método de pago: ${metodoPagoNormalizado}`);
         console.log(`📊 [${requestId}] Estado inicial: ${estadoInicial}`);
         
         console.log(`🛍️ [${requestId}] ===== INICIANDO PROCESAMIENTO DE PRODUCTOS =====`);        
