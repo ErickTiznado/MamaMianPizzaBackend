@@ -218,7 +218,7 @@ exports.submitContent = (req, res) => {
 
 
 exports.getLasMasPopulares = (req, res) => {
-    pool.query('SELECT * FROM productos WHERE seccion = "Las más populares" ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {        if(err){
+    pool.query('SELECT * FROM productos WHERE seccion = "Las más populares" AND activo = 1 ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {        if(err){
             console.error('Error al obtener productos', err);
             // Log error when getting popular products
             const descripcionLog = `Error al consultar productos más populares - ${err.message}`;
@@ -226,7 +226,7 @@ exports.getLasMasPopulares = (req, res) => {
             return res.status(500).json({ message: 'Error al obtener productos' });
         }
         // Log successful query
-        const descripcionLog = `Productos más populares consultados exitosamente - ${results.length} productos encontrados`;
+        const descripcionLog = `Productos más populares consultados exitosamente - ${results.length} productos activos encontrados`;
         logAction(req, 'READ', 'productos', descripcionLog);
         
         res.status(200).json({ message: 'Productos obtenidos exitosamente', productos: results });
@@ -236,7 +236,7 @@ exports.getLasMasPopulares = (req, res) => {
 
 
 exports.getRecomendacionDeLacasa = (req, res) => {
-    pool.query('SELECT * FROM productos where seccion = "Recomendación de la casa" ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {        if(err){
+    pool.query('SELECT * FROM productos where seccion = "Recomendación de la casa" AND activo = 1 ORDER BY fecha_creacion DESC LIMIT 3', (err, results) => {        if(err){
             console.error('Error al obtener productos', err);
             // Log error when getting house recommendations
             const descripcionLog = `Error al consultar recomendaciones de la casa - ${err.message}`;
@@ -244,7 +244,7 @@ exports.getRecomendacionDeLacasa = (req, res) => {
             return res.status(500).json({ message: 'Error al obtener productos' });
         }
         // Log successful query
-        const descripcionLog = `Recomendaciones de la casa consultadas exitosamente - ${results.length} productos encontrados`;
+        const descripcionLog = `Recomendaciones de la casa consultadas exitosamente - ${results.length} productos activos encontrados`;
         logAction(req, 'READ', 'productos', descripcionLog);
         
         res.status(200).json({message: 'Productos obtenidos exitosamente', productos: results });            
@@ -269,6 +269,7 @@ exports.getMenu = (req, res) => {
     JOIN precios pr ON p.id_producto = pr.pizza_id
     JOIN tamanos t  ON pr.tamano_id   = t.id_tamano
     JOIN categorias c ON p.id_categoria = c.id_categoria
+    WHERE p.activo = 1
     ORDER BY p.id_producto, t.indice;
   `;  pool.query(sql, (err, rows) => {    if (err) {
       console.error(err);
@@ -278,7 +279,7 @@ exports.getMenu = (req, res) => {
       return res.status(500).json({ message: 'Error al obtener el menú' });
     }
       // Log successful menu query
-    const descripcionLog = `Menú consultado exitosamente - ${rows.length} registros encontrados`;
+    const descripcionLog = `Menú consultado exitosamente - ${rows.length} registros de productos activos encontrados`;
     logAction(req, 'READ', 'productos', descripcionLog);
     
     // Agrupamos por pizza

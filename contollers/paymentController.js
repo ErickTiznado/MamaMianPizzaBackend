@@ -665,7 +665,6 @@ exports.processPaymentAndOrder = async (req, res) => {
                     })),
                     subtotal: req.body.productos.reduce((sum, p) => sum + (p.cantidad * p.precio_unitario), 0),
                     costo_envio: req.body.tipo_entrega === 'domicilio' ? 2.50 : 0,
-                    impuestos: 0,
                     total: req.body.productos.reduce((sum, p) => sum + (p.cantidad * p.precio_unitario), 0) + 
                            (req.body.tipo_entrega === 'domicilio' ? 2.50 : 0) - 
                            (req.body.descuento || 0),

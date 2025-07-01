@@ -596,7 +596,6 @@ exports.createOrder = async (req, res) => {
             productos,
             subtotal,
             costo_envio,
-            impuestos,
             total,
             aceptado_terminos,
             tiempo_estimado_entrega
@@ -610,7 +609,6 @@ exports.createOrder = async (req, res) => {
             productos_count: productos ? productos.length : 0,
             subtotal,
             costo_envio,
-            impuestos,
             total,
             aceptado_terminos,
             tiempo_estimado_entrega
@@ -964,13 +962,13 @@ exports.createOrder = async (req, res) => {
         const orderInsertFields = [
             'codigo_pedido', 'id_usuario', 'id_direccion', 'estado', 'total', 'tipo_cliente', 
             'metodo_pago', 'nombre_cliente', 'apellido_cliente', 'telefono', 'email', 
-            'subtotal', 'costo_envio', 'impuestos', 'aceptado_terminos', 'tiempo_estimado_entrega'
+            'subtotal', 'costo_envio', 'aceptado_terminos', 'tiempo_estimado_entrega'
         ];
         
         const orderInsertValues = [
             codigo_pedido, id_usuario, id_direccion, 'pendiente', total, tipo_cliente, 
             metodo_pago, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
-            subtotal, costo_envio, impuestos, aceptado_terminos ? 1 : 0, tiempo_estimado_entrega
+            subtotal, costo_envio, aceptado_terminos ? 1 : 0, tiempo_estimado_entrega
         ];
 
         // Para usuarios invitados, también incluir id_usuario_invitado
@@ -2692,7 +2690,6 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
             productos,
             subtotal,
             costo_envio,
-            impuestos,
             total,
             aceptado_terminos = true,
             tiempo_estimado_entrega
@@ -2786,14 +2783,14 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
         const orderInsertFields = [
             'codigo_pedido', 'id_usuario', 'id_direccion', 'estado', 'total', 'tipo_cliente', 
             'metodo_pago', 'nombre_cliente', 'apellido_cliente', 'telefono', 'email', 
-            'subtotal', 'costo_envio', 'impuestos', 'aceptado_terminos', 'tiempo_estimado_entrega',
+            'subtotal', 'costo_envio', 'aceptado_terminos', 'tiempo_estimado_entrega',
             'transaction_id'
         ];
         
         const orderInsertValues = [
             codigo_pedido, id_usuario, id_direccion, 'en proceso', total, tipo_cliente || 'invitado', 
             metodo_pago || 'tarjeta_credito', cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
-            subtotal, costo_envio || 0, impuestos || 0, aceptado_terminos ? 1 : 0, tiempo_estimado_entrega || 30,
+            subtotal, costo_envio || 0, aceptado_terminos ? 1 : 0, tiempo_estimado_entrega || 30,
             transactionId
         ];
 
