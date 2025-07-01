@@ -774,18 +774,29 @@ exports.createOrder = async (req, res) => {
         
         console.log(`✅ [${requestId}] Todos los productos validados correctamente`);        
         
-        // Basic payment method validation (only cash allowed now)
+        // Payment method validation and normalization
         console.log(`💳 [${requestId}] Validando método de pago: ${metodo_pago}...`);
-        const metodosValidos = ['efectivo'];
-        if (!metodosValidos.includes(metodo_pago)) {
+        
+        // Normalize payment method names
+        let metodoPagoNormalizado = metodo_pago;
+        if (metodo_pago === 'tarjeta') {
+            metodoPagoNormalizado = 'tarjeta_credito';
+            console.log(`🔄 [${requestId}] Método de pago normalizado: 'tarjeta' -> 'tarjeta_credito'`);
+        }
+        
+        const metodosValidos = ['efectivo', 'tarjeta_credito'];
+        if (!metodosValidos.includes(metodoPagoNormalizado)) {
             console.error(`❌ [${requestId}] Método de pago inválido: ${metodo_pago}`);
             return res.status(400).json({
                 message: 'Método de pago inválido',
-                detalle: `El método de pago "${metodo_pago}" no es válido. Solo se acepta efectivo.`,
+                detalle: `El método de pago "${metodo_pago}" no es válido. Métodos válidos: ${metodosValidos.join(', ')}.`,
                 request_id: requestId,
                 metodos_validos: metodosValidos
             });
         }
+        
+        // Update the payment method to use the normalized version
+        metodo_pago = metodoPagoNormalizado;
         
         console.log(`✅ [${requestId}] Método de pago validado correctamente`);        // Validate numeric fields
         console.log(`🔢 [${requestId}] Validando campos numéricos...`);
@@ -965,8 +976,15 @@ exports.createOrder = async (req, res) => {
             'subtotal', 'costo_envio', 'aceptado_terminos', 'tiempo_estimado_entrega'
         ];
         
+        // Determine initial order status based on payment method
+        let estadoInicial = 'pendiente'; // Default for cash payments
+        if (metodo_pago === 'tarjeta_credito') {
+            estadoInicial = 'pendiente_pago'; // Card payments need payment processing
+            console.log(`💳 [${requestId}] Pago con tarjeta detectado, estado inicial: 'pendiente_pago'`);
+        }
+        
         const orderInsertValues = [
-            codigo_pedido, id_usuario, id_direccion, 'pendiente', total, tipo_cliente, 
+            codigo_pedido, id_usuario, id_direccion, estadoInicial, total, tipo_cliente, 
             metodo_pago, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
             subtotal, costo_envio, aceptado_terminos ? 1 : 0, tiempo_estimado_entrega
         ];
@@ -994,6 +1012,8 @@ exports.createOrder = async (req, res) => {
         console.log(`🔖 [${requestId}] Código del pedido: ${codigo_pedido}`);
         console.log(`👤 [${requestId}] Tipo de cliente: ${tipo_cliente}`);
         console.log(`💰 [${requestId}] Total del pedido: $${total}`);
+        console.log(`💳 [${requestId}] Método de pago: ${metodo_pago}`);
+        console.log(`📊 [${requestId}] Estado inicial: ${estadoInicial}`);
         
         console.log(`🛍️ [${requestId}] ===== INICIANDO PROCESAMIENTO DE PRODUCTOS =====`);        
         // Array para almacenar los detalles insertados correctamente
