@@ -774,18 +774,12 @@ exports.createOrder = async (req, res) => {
         
         console.log(`✅ [${requestId}] Todos los productos validados correctamente`);        
         
-        // Payment method validation and normalization
+        // Payment method validation (based on database ENUM)
         console.log(`💳 [${requestId}] Validando método de pago: ${metodo_pago}...`);
         
-        // Normalize payment method names
-        let metodoPagoNormalizado = metodo_pago;
-        if (metodo_pago === 'tarjeta') {
-            metodoPagoNormalizado = 'tarjeta_credito';
-            console.log(`🔄 [${requestId}] Método de pago normalizado: 'tarjeta' -> 'tarjeta_credito'`);
-        }
-        
-        const metodosValidos = ['efectivo', 'tarjeta_credito'];
-        if (!metodosValidos.includes(metodoPagoNormalizado)) {
+        // Valid payment methods according to database ENUM
+        const metodosValidos = ['efectivo', 'tarjeta'];
+        if (!metodosValidos.includes(metodo_pago)) {
             console.error(`❌ [${requestId}] Método de pago inválido: ${metodo_pago}`);
             return res.status(400).json({
                 message: 'Método de pago inválido',
@@ -967,24 +961,50 @@ exports.createOrder = async (req, res) => {
         
         console.log(`🛒 [${requestId}] ===== INICIANDO CREACIÓN DEL PEDIDO =====`);// Create new order
         console.log(`🛒 [${requestId}] Preparando campos para inserción del pedido...`);
+        
+        // Determine initial order status based on payment method (using valid ENUM values)
+        let estadoInicial = 'pendiente'; // Default for cash payments
+        if (metodo_pago === 'tarjeta') {
+            // For card payments, check if we have transaction details
+            if (req.body.wompi_transaction_id && req.body.wompi_authorization_code) {
+                estadoInicial = 'en proceso'; // Payment already processed
+                console.log(`💳 [${requestId}] Pago con tarjeta procesado, estado inicial: 'en proceso'`);
+            } else {
+                estadoInicial = 'pendiente'; // Payment pending
+                console.log(`💳 [${requestId}] Pago con tarjeta pendiente, estado inicial: 'pendiente'`);
+            }
+        }
+        
+        // Prepare order fields and values (base fields)
         const orderInsertFields = [
             'codigo_pedido', 'id_usuario', 'id_direccion', 'estado', 'total', 'tipo_cliente', 
             'metodo_pago', 'nombre_cliente', 'apellido_cliente', 'telefono', 'email', 
             'subtotal', 'costo_envio', 'aceptado_terminos', 'tiempo_estimado_entrega'
         ];
         
-        // Determine initial order status based on payment method
-        let estadoInicial = 'pendiente'; // Default for cash payments
-        if (metodoPagoNormalizado === 'tarjeta_credito') {
-            estadoInicial = 'pendiente_pago'; // Card payments need payment processing
-            console.log(`💳 [${requestId}] Pago con tarjeta detectado, estado inicial: 'pendiente_pago'`);
-        }
-        
         const orderInsertValues = [
             codigo_pedido, id_usuario, id_direccion, estadoInicial, total, tipo_cliente, 
-            metodoPagoNormalizado, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
+            metodo_pago, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
             subtotal, costo_envio, aceptado_terminos ? 1 : 0, tiempo_estimado_entrega
         ];
+        
+        // Add payment details if this is a card payment with transaction info
+        if (metodo_pago === 'tarjeta' && req.body.wompi_transaction_id) {
+            orderInsertFields.push('payment_reference');
+            orderInsertValues.push(req.body.wompi_transaction_id);
+            
+            if (req.body.wompi_authorization_code) {
+                orderInsertFields.push('payment_authorization');
+                orderInsertValues.push(req.body.wompi_authorization_code);
+            }
+            
+            if (estadoInicial === 'en proceso') {
+                orderInsertFields.push('payment_completed_at');
+                orderInsertValues.push(new Date());
+            }
+            
+            console.log(`💳 [${requestId}] Agregando detalles de pago: Transaction ID: ${req.body.wompi_transaction_id}, Auth Code: ${req.body.wompi_authorization_code || 'N/A'}`);
+        }
 
         // Para usuarios invitados, también incluir id_usuario_invitado
         if (tipo_cliente === 'invitado' && id_usuario_invitado) {
@@ -1009,7 +1029,7 @@ exports.createOrder = async (req, res) => {
         console.log(`🔖 [${requestId}] Código del pedido: ${codigo_pedido}`);
         console.log(`👤 [${requestId}] Tipo de cliente: ${tipo_cliente}`);
         console.log(`💰 [${requestId}] Total del pedido: $${total}`);
-        console.log(`💳 [${requestId}] Método de pago: ${metodoPagoNormalizado}`);
+        console.log(`💳 [${requestId}] Método de pago: ${metodo_pago}`);
         console.log(`📊 [${requestId}] Estado inicial: ${estadoInicial}`);
         
         console.log(`🛍️ [${requestId}] ===== INICIANDO PROCESAMIENTO DE PRODUCTOS =====`);        
