@@ -2845,7 +2845,7 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
         
         // Enviar notificación (opcional)
         try {
-            await notifyOrder(id_pedido, 'new_order_from_payment');
+            await notifyOrder({orderId: id_pedido, total});
             console.log(`📢 [${requestId}] Notificación enviada`);
         } catch (notificationError) {
             console.warn(`⚠️ [${requestId}] Error al enviar notificación:`, notificationError.message);
