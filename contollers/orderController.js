@@ -2780,6 +2780,8 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
         
         // Crear pedido con estado 'en proceso' (automático para pagos exitosos)
         console.log(`🛒 [${requestId}] Creando pedido con estado 'en proceso'...`);
+        console.log(`💳 [${requestId}] Método de pago recibido: ${metodo_pago || 'no especificado'}`);
+        
         const orderInsertFields = [
             'codigo_pedido', 'id_usuario', 'id_direccion', 'estado', 'total', 'tipo_cliente', 
             'metodo_pago', 'nombre_cliente', 'apellido_cliente', 'telefono', 'email', 
@@ -2787,9 +2789,13 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
             'transaction_id'
         ];
         
+        // Asegurar que el método de pago sea correcto para pagos con tarjeta
+        const metodoPagoFinal = metodo_pago || 'tarjeta_credito';
+        console.log(`💳 [${requestId}] Método de pago asignado: ${metodoPagoFinal}`);
+        
         const orderInsertValues = [
             codigo_pedido, id_usuario, id_direccion, 'en proceso', total, tipo_cliente || 'invitado', 
-            metodo_pago || 'tarjeta_credito', cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
+            metodoPagoFinal, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
             subtotal, costo_envio || 0, aceptado_terminos ? 1 : 0, tiempo_estimado_entrega || 30,
             transactionId
         ];
@@ -2803,12 +2809,18 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
         const placeholders = orderInsertFields.map(() => '?').join(', ');
         const orderQuery = `INSERT INTO pedidos (${orderInsertFields.join(', ')}) VALUES (${placeholders})`;
 
-        console.log(`💾 [${requestId}] Ejecutando inserción del pedido...`);
+        console.log(`� [${requestId}] Query del pedido:`, orderQuery);
+        console.log(`📝 [${requestId}] Valores del pedido (método de pago en posición 6):`, orderInsertValues);
+        console.log(`💳 [${requestId}] Confirmando método de pago antes de insertar: ${orderInsertValues[6]}`);
+
+        console.log(`�💾 [${requestId}] Ejecutando inserción del pedido...`);
         const [orderResult] = await connection.query(orderQuery, orderInsertValues);
 
         const id_pedido = orderResult.insertId;
         console.log(`✅ [${requestId}] Pedido creado en estado 'en proceso'!`);
         console.log(`🆔 [${requestId}] ID del pedido: ${id_pedido}`);
+        console.log(`💳 [${requestId}] Método de pago registrado: ${metodoPagoFinal}`);
+        console.log(`💰 [${requestId}] Transaction ID: ${transactionId}`);
         
         // Procesar productos
         console.log(`🛍️ [${requestId}] Procesando productos del pedido...`);

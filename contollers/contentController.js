@@ -52,8 +52,58 @@ const getUserInfo = (req) => {
     };
 };
 
+// Helper function to ensure admin exists in usuarios table for logging
+const ensureAdminInUsuarios = async (adminId, adminInfo) => {
+    return new Promise((resolve, reject) => {
+        // Verificar si el admin ya existe en usuarios
+        pool.query(
+            'SELECT id_usuario FROM usuarios WHERE id_usuario = ?',
+            [adminId],
+            (checkErr, checkResults) => {
+                if (checkErr) {
+                    console.error('Error verificando usuario admin:', checkErr);
+                    resolve(false);
+                    return;
+                }
+                
+                if (checkResults.length > 0) {
+                    // Ya existe, todo bien
+                    resolve(true);
+                } else {
+                    // No existe, necesitamos crearlo
+                    console.log(`🔧 Creando usuario equivalente para admin ID ${adminId}...`);
+                    
+                    pool.query(
+                        `INSERT INTO usuarios (id_usuario, nombre, correo, contrasena, tipo_usuario, fecha_registro) 
+                         VALUES (?, ?, ?, ?, 'admin', NOW())
+                         ON DUPLICATE KEY UPDATE 
+                         nombre = VALUES(nombre), 
+                         correo = VALUES(correo), 
+                         tipo_usuario = 'admin'`,
+                        [
+                            adminId,
+                            adminInfo.nombre || 'Administrador',
+                            adminInfo.email || `admin${adminId}@mamamianpizza.com`,
+                            '$2b$10$dummy.hash.for.admin.logging.sync'
+                        ],
+                        (insertErr, insertResults) => {
+                            if (insertErr) {
+                                console.error('Error creando usuario admin para logs:', insertErr);
+                                resolve(false);
+                            } else {
+                                console.log(`✅ Usuario admin ${adminId} creado exitosamente para logs`);
+                                resolve(true);
+                            }
+                        }
+                    );
+                }
+            }
+        );
+    });
+};
+
 // Helper function to log actions to database with enhanced user info
-const logAction = (req, accion, tabla_afectada, descripcion) => {
+const logAction = async (req, accion, tabla_afectada, descripcion) => {
     const userInfo = getUserInfo(req);
     const userId = userInfo.id;
     
@@ -62,17 +112,56 @@ const logAction = (req, accion, tabla_afectada, descripcion) => {
         ? `[${userInfo.tipo.toUpperCase()}] ${userInfo.nombre} (${userInfo.email}): ${descripcion}`
         : `[ANONIMO]: ${descripcion}`;
     
-    pool.query(
-        'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
-        [userId, accion, tabla_afectada, descripcionCompleta],
-        (logErr) => {
-            if (logErr) {
-                console.error('Error al registrar en logs:', logErr);
-            } else {
-                console.log(`📝 Log registrado: ${accion} en ${tabla_afectada} por ${userInfo.nombre || 'Usuario anónimo'}`);
+    // Función helper para insertar log sin id_usuario
+    const insertLogWithoutUser = () => {
+        pool.query(
+            'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (NULL, ?, ?, ?)',
+            [accion, tabla_afectada, descripcionCompleta],
+            (logErr) => {
+                if (logErr) {
+                    console.error('Error al registrar en logs (sin usuario):', logErr);
+                } else {
+                    console.log(`📝 Log registrado: ${accion} en ${tabla_afectada} por ${userInfo.nombre || 'Usuario anónimo'} (sin ID de usuario)`);
+                }
+            }
+        );
+    };
+    
+    if (userId) {
+        // Si es un admin, asegurar que existe en la tabla usuarios
+        if (userInfo.tipo === 'admin') {
+            try {
+                const adminExists = await ensureAdminInUsuarios(userId, userInfo);
+                if (!adminExists) {
+                    console.warn(`⚠️ No se pudo sincronizar admin ID ${userId}, insertando log sin referencia`);
+                    insertLogWithoutUser();
+                    return;
+                }
+            } catch (syncErr) {
+                console.error('Error sincronizando admin para logs:', syncErr);
+                insertLogWithoutUser();
+                return;
             }
         }
-    );
+        
+        // Intentar insertar log con userId
+        pool.query(
+            'INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) VALUES (?, ?, ?, ?)',
+            [userId, accion, tabla_afectada, descripcionCompleta],
+            (logErr) => {
+                if (logErr) {
+                    console.error('Error al registrar en logs:', logErr);
+                    // Como fallback, intentar insertar sin id_usuario
+                    insertLogWithoutUser();
+                } else {
+                    console.log(`📝 Log registrado: ${accion} en ${tabla_afectada} por ${userInfo.nombre || 'Usuario'} (ID: ${userId})`);
+                }
+            }
+        );
+    } else {
+        // No hay userId, insertar sin referencia de usuario
+        insertLogWithoutUser();
+    }
 };
 
 // Configure multer for image uploads
