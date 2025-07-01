@@ -17,11 +17,12 @@ const generateUserToken = (userId) => {
 };
 
 // Generate JWT token for administrators
-const generateJWTToken = (adminId, adminEmail, adminNombre, expiresIn = JWT_ADMIN_EXPIRES_IN) => {
+const generateJWTToken = (adminId, adminEmail, adminNombre, adminRol, expiresIn = JWT_ADMIN_EXPIRES_IN) => {
     const payload = {
         id: adminId,
         email: adminEmail,
         nombre: adminNombre,
+        rol: adminRol,
         type: 'admin',
         iat: Math.floor(Date.now() / 1000)
     };
@@ -1398,7 +1399,7 @@ exports.loginAdmin = async (req, res) => {
         
         // Find admin by email
         pool.query(
-            'SELECT id_admin, nombre, correo, contrasena, ultimo_acceso FROM administradores WHERE correo = ?',
+            'SELECT id_admin, nombre, correo, contrasena, rol, ultimo_acceso FROM administradores WHERE correo = ?',
             [correo],
             async (err, adminResults) => {
                 if (err) {
@@ -1488,7 +1489,7 @@ exports.loginAdmin = async (req, res) => {
                     console.log('✅ Contraseña válida! Generando token JWT...');
                     
                     // Generate JWT token
-                    const accessToken = generateJWTToken(admin.id_admin, admin.correo, admin.nombre);
+                    const accessToken = generateJWTToken(admin.id_admin, admin.correo, admin.nombre, admin.rol);
                     console.log('🎟️ Token JWT generado (primeros 20 chars):', accessToken.substring(0, 20) + '...');
                     
                     // Update last access
@@ -1529,6 +1530,7 @@ exports.loginAdmin = async (req, res) => {
                             id: admin.id_admin,
                             nombre: admin.nombre,
                             correo: admin.correo,
+                            rol: admin.rol,
                             ultimo_acceso: admin.ultimo_acceso
                         },
                         token: accessToken,
@@ -1604,7 +1606,7 @@ exports.refreshAdminToken = async (req, res) => {
         }
           // Verify admin still exists
         pool.query(
-            'SELECT id_admin, nombre, correo FROM administradores WHERE id_admin = ?',
+            'SELECT id_admin, nombre, correo, rol FROM administradores WHERE id_admin = ?',
             [adminId],
             (err, adminResults) => {
                 if (err) {
@@ -1626,7 +1628,7 @@ exports.refreshAdminToken = async (req, res) => {
                   const admin = adminResults[0];
                 
                 // Generate new token
-                const newAccessToken = generateJWTToken(admin.id_admin, admin.correo, admin.nombre);
+                const newAccessToken = generateJWTToken(admin.id_admin, admin.correo, admin.nombre, admin.rol);
                 
                 // Log token refresh (usando NULL para id_usuario ya que es un admin)
                 const descripcionLog = `Token JWT renovado para administrador: ${admin.nombre} (${admin.correo}) - ID Admin: ${admin.id_admin}`;
@@ -1718,6 +1720,7 @@ exports.verifyAdminToken = (req, res, next) => {
             id: decoded.id,
             email: decoded.email,
             nombre: decoded.nombre,
+            rol: decoded.rol,
             type: decoded.type
         };
         
@@ -1740,7 +1743,7 @@ exports.getAdminProfile = async (req, res) => {
         const adminId = req.admin.id;
           // Get admin details from database
         pool.query(
-            'SELECT id_admin, nombre, correo, ultimo_acceso, fecha_creacion FROM administradores WHERE id_admin = ?',
+            'SELECT id_admin, nombre, correo, rol, ultimo_acceso, fecha_creacion FROM administradores WHERE id_admin = ?',
             [adminId],
             (err, adminResults) => {
                 if (err) {

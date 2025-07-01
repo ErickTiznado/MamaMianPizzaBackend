@@ -885,14 +885,37 @@ exports.processPaymentAndOrder = async (req, res) => {
         console.log(`✅ [${requestId}] Transacción preparada exitosamente`);
         console.log(`🎯 [${requestId}] Estado: Esperando confirmación de pago`);
 
-        // Actualizar la transacción con los datos del pedido para usar después
-        await connection.query(
-            'UPDATE transacciones SET descripcion = ? WHERE id = ?',
-            [`Datos del pedido: ${JSON.stringify(pedidoDataCompleto)}`, transactionId]
-        );
+        // Guardar datos del pedido en una descripción más compacta (antes del commit)
+        const descripcionCompacta = `Pedido: ${pedidoData.productos.length} productos, Total: $${pedidoData.total}, Cliente: ${nombre} ${apellido}`;
+        
+        console.log(`💾 [${requestId}] Actualizando descripción de transacción...`);
+        try {
+            await connection.query(
+                'UPDATE transacciones SET descripcion = ? WHERE id = ?',
+                [descripcionCompacta, transactionId]
+            );
+            console.log(`✅ [${requestId}] Descripción actualizada exitosamente`);
+        } catch (updateError) {
+            console.error(`⚠️ [${requestId}] Error al actualizar descripción (no crítico):`, updateError.message);
+            // No fallar por esto, continuar con el proceso
+        }
 
-        // Confirmar la transacción (solo la transacción, no el pedido)
+        // Guardar datos completos del pedido en tabla separada (más seguro)
+        console.log(`💾 [${requestId}] Guardando datos completos del pedido en tabla temporal...`);
+        try {
+            await connection.query(
+                'INSERT INTO datos_pedido_temporal (transaction_id, datos_pedido) VALUES (?, ?)',
+                [transactionId, JSON.stringify(pedidoDataCompleto)]
+            );
+            console.log(`✅ [${requestId}] Datos del pedido guardados en tabla temporal`);
+        } catch (tempDataError) {
+            console.error(`⚠️ [${requestId}] Error al guardar datos temporales:`, tempDataError.message);
+            // Continuar sin fallar, los datos están en la transacción básica
+        }
+
+        // Confirmar la transacción
         await connection.commit();
+        console.log(`✅ [${requestId}] Transaction committed exitosamente`);
 
         // Log de éxito de preparación
         logAction(req, 'PAYMENT_PREPARED_SUCCESS', 'transacciones', 
