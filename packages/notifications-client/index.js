@@ -2,7 +2,16 @@ const axios = require('axios');
 
 const NOTIF_URL = process.env.NOTIF_URL;
 const NOTIF_KEY = process.env.NOTIF_KEY;
-const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000';
+const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3001';
+
+// Intentar importar el controlador de notificaciones para uso directo
+let notificationController = null;
+try {
+    notificationController = require('../../contollers/notificationController');
+    console.log('✅ Controlador de notificaciones importado exitosamente para uso directo');
+} catch (error) {
+    console.log('⚠️ No se pudo importar el controlador de notificaciones, usando HTTP fallback');
+}
 
 /**
  * 
@@ -14,20 +23,24 @@ const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000';
 async function notifyOrder({orderId, total}){
     console.log(`📢 Iniciando notificación para pedido #${orderId} con total $${total}`);
     
-    // Crear notificación local en la base de datos
-    try {
-        console.log(`📝 Creando notificación local en la base de datos...`);
-        const localResponse = await axios.post(
-            `${SERVER_URL}/api/notifications`,
-            {
-                titulo: `Nuevo pedido recibido #${orderId}`,
-                mensaje: `Pedido #${orderId} por un total de $${total.toFixed(2)}.`,
-                tipo: 'pedido', 
-            }
-        );
-        console.log(`✅ Notificación local creada exitosamente:`, localResponse.data);
-    } catch (localError) {
-        console.error(`❌ Error creando notificación local:`, localError.response?.data || localError.message);
+    const titulo = `Nuevo pedido recibido #${orderId}`;
+    const mensaje = `Pedido #${orderId} por un total de $${total.toFixed(2)}.`;
+    const tipo = 'pedido';
+    
+    // Intentar crear notificación directamente si el controlador está disponible
+    if (notificationController && notificationController.createNotificationDirect) {
+        try {
+            console.log(`📝 Creando notificación directa...`);
+            const notification = await notificationController.createNotificationDirect(titulo, mensaje, tipo);
+            console.log(`✅ Notificación directa creada y enviada vía SSE:`, notification);
+        } catch (directError) {
+            console.error(`❌ Error creando notificación directa:`, directError.message);
+            console.log(`🔄 Intentando con HTTP fallback...`);
+            await createNotificationViaHTTP(titulo, mensaje, tipo);
+        }
+    } else {
+        // Fallback a HTTP si no está disponible el controlador
+        await createNotificationViaHTTP(titulo, mensaje, tipo);
     }
     
     // Si están configuradas las variables de entorno para notificaciones externas, también enviar ahí
@@ -37,10 +50,10 @@ async function notifyOrder({orderId, total}){
             const externalResponse = await axios.post(
                 `${NOTIF_URL}/api/notifications`,
                 {
-                    titulo: `Nuevo pedido recibido #${orderId}`,
-                    mensaje: `Pedido #${orderId} por un total de $${total.toFixed(2)}.`,
+                    titulo: titulo,
+                    mensaje: mensaje,
                     url: `/pedidos/${orderId}`,
-                    tipo: 'pedido', 
+                    tipo: tipo, 
                 },
                 {
                     headers: {'x-internal-key': NOTIF_KEY}
@@ -55,6 +68,25 @@ async function notifyOrder({orderId, total}){
     }
     
     return { success: true, message: 'Notificación procesada' };
+}
+
+// Función auxiliar para crear notificación vía HTTP (fallback)
+async function createNotificationViaHTTP(titulo, mensaje, tipo) {
+    try {
+        console.log(`📝 Creando notificación vía HTTP...`);
+        const localResponse = await axios.post(
+            `${SERVER_URL}/api/notifications`,
+            {
+                titulo: titulo,
+                mensaje: mensaje,
+                tipo: tipo, 
+            }
+        );
+        console.log(`✅ Notificación HTTP creada exitosamente:`, localResponse.data);
+    } catch (localError) {
+        console.error(`❌ Error creando notificación HTTP:`, localError.response?.data || localError.message);
+        throw localError;
+    }
 }
 
 

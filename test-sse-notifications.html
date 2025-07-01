@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test SSE Notifications - Mama Mian Pizza</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.disconnected {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef5350;
+        }
+        .status.connected {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #4caf50;
+        }
+        .notification {
+            background: #f3e5f5;
+            border: 1px solid #9c27b0;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 4px;
+            border-left: 4px solid #9c27b0;
+        }
+        .notification-title {
+            font-weight: bold;
+            color: #6a1b9a;
+        }
+        .notification-message {
+            margin: 5px 0;
+            color: #424242;
+        }
+        .notification-time {
+            font-size: 12px;
+            color: #757575;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1976d2;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .logs {
+            background: #263238;
+            color: #b0bec5;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍕 Test SSE Notifications - Mama Mian Pizza</h1>
+        <p>Esta página prueba las notificaciones SSE (Server-Sent Events) del sistema.</p>
+        
+        <div id="status" class="status disconnected">
+            🔴 Desconectado
+        </div>
+        
+        <div class="controls">
+            <button id="connectBtn" onclick="connectSSE()">🔌 Conectar SSE</button>
+            <button id="disconnectBtn" onclick="disconnectSSE()" disabled>🔌 Desconectar</button>
+            <button onclick="clearNotifications()">🗑️ Limpiar Notificaciones</button>
+            <button onclick="clearLogs()">📝 Limpiar Logs</button>
+        </div>
+        
+        <h3>📬 Notificaciones Recibidas:</h3>
+        <div id="notifications">
+            <p style="color: #757575; font-style: italic;">No hay notificaciones aún...</p>
+        </div>
+        
+        <h3>📋 Logs de Conexión:</h3>
+        <div id="logs" class="logs">
+            Logs aparecerán aquí...
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let notificationCount = 0;
+        
+        // URL del servidor (cambia esto si tu servidor está en otro puerto o dominio)
+        const SERVER_URL = 'http://localhost:3001';
+        
+        function log(message) {
+            const logs = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            logs.innerHTML += `[${timestamp}] ${message}\n`;
+            logs.scrollTop = logs.scrollHeight;
+            console.log(`[SSE] ${message}`);
+        }
+        
+        function updateStatus(connected) {
+            const status = document.getElementById('status');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            
+            if (connected) {
+                status.className = 'status connected';
+                status.innerHTML = '🟢 Conectado a SSE';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            } else {
+                status.className = 'status disconnected';
+                status.innerHTML = '🔴 Desconectado';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            }
+        }
+        
+        function addNotification(notification) {
+            const container = document.getElementById('notifications');
+            notificationCount++;
+            
+            // Si es la primera notificación, limpiar el mensaje placeholder
+            if (notificationCount === 1) {
+                container.innerHTML = '';
+            }
+            
+            const notifElement = document.createElement('div');
+            notifElement.className = 'notification';
+            notifElement.innerHTML = `
+                <div class="notification-title">${notification.titulo || 'Sin título'}</div>
+                <div class="notification-message">${notification.mensaje || 'Sin mensaje'}</div>
+                <div class="notification-time">
+                    ID: ${notification.id_notificacion || 'N/A'} | 
+                    Tipo: ${notification.tipo || 'sin tipo'} | 
+                    Estado: ${notification.estado || 'N/A'} | 
+                    Recibida: ${new Date().toLocaleTimeString()}
+                </div>
+            `;
+            
+            container.insertBefore(notifElement, container.firstChild);
+            log(`📬 Notificación recibida: "${notification.titulo}"`);
+        }
+        
+        function connectSSE() {
+            if (eventSource) {
+                log('⚠️ Ya hay una conexión SSE activa');
+                return;
+            }
+            
+            log('🔗 Iniciando conexión SSE...');
+            eventSource = new EventSource(`${SERVER_URL}/api/notifications/stream`);
+            
+            eventSource.onopen = function(event) {
+                log('✅ Conexión SSE establecida exitosamente');
+                updateStatus(true);
+            };
+            
+            eventSource.onmessage = function(event) {
+                log(`📨 Mensaje SSE recibido: ${event.data}`);
+                try {
+                    const notification = JSON.parse(event.data);
+                    addNotification(notification);
+                } catch (error) {
+                    log(`❌ Error parseando notificación: ${error.message}`);
+                }
+            };
+            
+            eventSource.onerror = function(event) {
+                log(`❌ Error en conexión SSE: ${event.type}`);
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    log('🔌 Conexión SSE cerrada');
+                    updateStatus(false);
+                    eventSource = null;
+                }
+            };
+        }
+        
+        function disconnectSSE() {
+            if (eventSource) {
+                log('🔌 Cerrando conexión SSE...');
+                eventSource.close();
+                eventSource = null;
+                updateStatus(false);
+                log('✅ Conexión SSE cerrada exitosamente');
+            }
+        }
+        
+        function clearNotifications() {
+            const container = document.getElementById('notifications');
+            container.innerHTML = '<p style="color: #757575; font-style: italic;">No hay notificaciones aún...</p>';
+            notificationCount = 0;
+            log('🗑️ Notificaciones limpiadas');
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+            log('📝 Logs limpiados');
+        }
+        
+        // Conectar automáticamente al cargar la página
+        window.onload = function() {
+            log('🚀 Página cargada, conectando automáticamente...');
+            setTimeout(connectSSE, 1000);
+        };
+        
+        // Desconectar al cerrar la página
+        window.onbeforeunload = function() {
+            disconnectSSE();
+        };
+    </script>
+</body>
+</html>

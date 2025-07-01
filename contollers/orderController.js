@@ -962,18 +962,9 @@ exports.createOrder = async (req, res) => {
         console.log(`🛒 [${requestId}] ===== INICIANDO CREACIÓN DEL PEDIDO =====`);// Create new order
         console.log(`🛒 [${requestId}] Preparando campos para inserción del pedido...`);
         
-        // Determine initial order status based on payment method (using valid ENUM values)
-        let estadoInicial = 'pendiente'; // Default for cash payments
-        if (metodo_pago === 'tarjeta') {
-            // For card payments, check if we have transaction details
-            if (req.body.wompi_transaction_id && req.body.wompi_authorization_code) {
-                estadoInicial = 'en proceso'; // Payment already processed
-                console.log(`💳 [${requestId}] Pago con tarjeta procesado, estado inicial: 'en proceso'`);
-            } else {
-                estadoInicial = 'pendiente'; // Payment pending
-                console.log(`💳 [${requestId}] Pago con tarjeta pendiente, estado inicial: 'pendiente'`);
-            }
-        }
+        // Determine initial order status - always 'pendiente' by default
+        let estadoInicial = 'pendiente'; // Todos los pedidos inician como pendientes por defecto
+        console.log(`� [${requestId}] Estado inicial asignado: '${estadoInicial}' (por defecto para todos los pedidos)`);
         
         // Prepare order fields and values (base fields)
         const orderInsertFields = [
@@ -998,10 +989,9 @@ exports.createOrder = async (req, res) => {
                 orderInsertValues.push(req.body.wompi_authorization_code);
             }
             
-            if (estadoInicial === 'en proceso') {
-                orderInsertFields.push('payment_completed_at');
-                orderInsertValues.push(new Date());
-            }
+            // Los pagos ya procesados incluyen timestamp de completado
+            orderInsertFields.push('payment_completed_at');
+            orderInsertValues.push(new Date());
             
             console.log(`💳 [${requestId}] Agregando detalles de pago: Transaction ID: ${req.body.wompi_transaction_id}, Auth Code: ${req.body.wompi_authorization_code || 'N/A'}`);
         }
@@ -2692,7 +2682,7 @@ exports.getProductCombinations = async (req, res) => {
 };
 
 /**
- * Crear orden automáticamente desde pago exitoso (estado: 'en proceso')
+ * Crear orden automáticamente desde pago exitoso (estado: 'pendiente')
  * Esta función es llamada desde el controlador de pagos cuando se confirma un pago
  */
 exports.createOrderFromPayment = async (orderData, transactionId) => {
@@ -2815,8 +2805,8 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
         
         console.log(`✅ [${requestId}] Dirección creada: ${id_direccion}`);
         
-        // Crear pedido con estado 'en proceso' (automático para pagos exitosos)
-        console.log(`🛒 [${requestId}] Creando pedido con estado 'en proceso'...`);
+        // Crear pedido con estado 'pendiente' (por defecto para todos los pedidos)
+        console.log(`🛒 [${requestId}] Creando pedido con estado 'pendiente'...`);
         console.log(`💳 [${requestId}] Método de pago recibido: ${metodo_pago || 'no especificado'}`);
         
         const orderInsertFields = [
@@ -2826,12 +2816,12 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
             'transaction_id'
         ];
         
-        // Asegurar que el método de pago sea correcto para pagos con tarjeta
-        const metodoPagoFinal = metodo_pago || 'tarjeta_credito';
+        // Para pagos desde sistema de pagos, usar 'tarjeta' según schema de BD
+        const metodoPagoFinal = metodo_pago || 'tarjeta';
         console.log(`💳 [${requestId}] Método de pago asignado: ${metodoPagoFinal}`);
         
         const orderInsertValues = [
-            codigo_pedido, id_usuario, id_direccion, 'en proceso', total, tipo_cliente || 'invitado', 
+            codigo_pedido, id_usuario, id_direccion, 'pendiente', total, tipo_cliente || 'invitado', 
             metodoPagoFinal, cliente.nombre, cliente.apellido, cliente.telefono, cliente.email || null, 
             subtotal, costo_envio || 0, aceptado_terminos ? 1 : 0, tiempo_estimado_entrega || 30,
             transactionId
@@ -2854,7 +2844,7 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
         const [orderResult] = await connection.query(orderQuery, orderInsertValues);
 
         const id_pedido = orderResult.insertId;
-        console.log(`✅ [${requestId}] Pedido creado en estado 'en proceso'!`);
+        console.log(`✅ [${requestId}] Pedido creado en estado 'pendiente'!`);
         console.log(`🆔 [${requestId}] ID del pedido: ${id_pedido}`);
         console.log(`💳 [${requestId}] Método de pago registrado: ${metodoPagoFinal}`);
         console.log(`💰 [${requestId}] Transaction ID: ${transactionId}`);
@@ -2907,7 +2897,7 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
         console.log(`⏱️ [${requestId}] Tiempo de procesamiento: ${processingTime}ms`);
         console.log(`🆔 [${requestId}] ID Pedido: ${id_pedido}`);
         console.log(`🔖 [${requestId}] Código: ${codigo_pedido}`);
-        console.log(`📊 [${requestId}] Estado: en proceso (automático)`);
+        console.log(`📊 [${requestId}] Estado: pendiente (por defecto)`);
         console.log(`💰 [${requestId}] Total: $${total}`);
         
         return {
@@ -2915,7 +2905,7 @@ exports.createOrderFromPayment = async (orderData, transactionId) => {
             data: {
                 id_pedido,
                 codigo_pedido,
-                estado: 'en proceso',
+                estado: 'pendiente',
                 total,
                 tipo_cliente: tipo_cliente || 'invitado',
                 productos_count: productos.length,

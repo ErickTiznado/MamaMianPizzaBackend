@@ -1,6 +1,35 @@
 // filepath: contollers/notificationController.js
 const pool = require('../config/db');
 
+// Almacenar las conexiones SSE activas
+const sseClients = new Set();
+
+// Función para enviar notificación a todos los clientes SSE conectados
+function broadcastNotification(notification) {
+    console.log(`📡 Broadcasting notificación a ${sseClients.size} clientes SSE:`, notification);
+    
+    if (sseClients.size === 0) {
+        console.log('⚠️ No hay clientes SSE conectados para recibir la notificación');
+        return;
+    }
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    sseClients.forEach(client => {
+        try {
+            client.write(`data: ${JSON.stringify(notification)}\n\n`);
+            successCount++;
+        } catch (error) {
+            console.error('❌ Error enviando notificación SSE a cliente:', error);
+            sseClients.delete(client);
+            errorCount++;
+        }
+    });
+    
+    console.log(`✅ Notificación SSE enviada: ${successCount} exitosos, ${errorCount} errores`);
+}
+
 // Obtener todas las notificaciones
 exports.getAllNotifications = (req, res) => {
     pool.query('SELECT * FROM notificaciones ORDER BY fecha_emision DESC', (err, results) => {
@@ -165,35 +194,6 @@ exports.markAllNotificationsAsRead = (req, res) => {
 };
 
 
-// Almacenar las conexiones SSE activas
-const sseClients = new Set();
-
-// Función para enviar notificación a todos los clientes SSE conectados
-function broadcastNotification(notification) {
-    console.log(`📡 Broadcasting notificación a ${sseClients.size} clientes SSE:`, notification);
-    
-    if (sseClients.size === 0) {
-        console.log('⚠️ No hay clientes SSE conectados para recibir la notificación');
-        return;
-    }
-    
-    let successCount = 0;
-    let errorCount = 0;
-    
-    sseClients.forEach(client => {
-        try {
-            client.write(`data: ${JSON.stringify(notification)}\n\n`);
-            successCount++;
-        } catch (error) {
-            console.error('❌ Error enviando notificación SSE a cliente:', error);
-            sseClients.delete(client);
-            errorCount++;
-        }
-    });
-    
-    console.log(`✅ Notificación SSE enviada: ${successCount} exitosos, ${errorCount} errores`);
-}
-
 // Endpoint SSE para notificaciones en tiempo real
 exports.getNotificationStream = (req, res) => {
     console.log('🔗 Nueva conexión SSE solicitada');
@@ -267,3 +267,58 @@ exports.getNotificationStream = (req, res) => {
         console.log(`❌ Error en conexión SSE. Clientes restantes: ${sseClients.size}`);
     });
 };
+
+// Exportar funciones para uso interno
+module.exports = {
+    getAllNotifications: exports.getAllNotifications,
+    createNotification: exports.createNotification,
+    getNotificationById: exports.getNotificationById,
+    updateNotificationStatus: exports.updateNotificationStatus,
+    deleteNotification: exports.deleteNotification,
+    getUnreadNotifications: exports.getUnreadNotifications,
+    markAllNotificationsAsRead: exports.markAllNotificationsAsRead,
+    getNotificationStream: exports.getNotificationStream,
+    broadcastNotification: broadcastNotification,
+    addSSEClient: (client) => sseClients.add(client),
+    removeSSEClient: (client) => sseClients.delete(client),
+    getSSEClientsCount: () => sseClients.size,
+    createNotificationDirect: createNotificationDirect
+};
+
+// Función auxiliar para crear notificación directamente sin HTTP
+function createNotificationDirect(titulo, mensaje, tipo = null) {
+    return new Promise((resolve, reject) => {
+        console.log(`📝 Creando notificación directa: "${titulo}" - "${mensaje}" (tipo: ${tipo || 'sin tipo'})`);
+        
+        pool.query(
+            'INSERT INTO notificaciones (titulo, mensaje, tipo) VALUES (?, ?, ?)',
+            [titulo, mensaje, tipo],
+            (err, results) => {
+                if (err) {
+                    console.error('❌ Error al crear notificación directa en BD:', err);
+                    return reject(err);
+                }
+                
+                console.log(`✅ Notificación directa creada en BD con ID: ${results.insertId}`);
+                
+                // Obtener la notificación recién creada para enviarla vía SSE
+                pool.query(
+                    'SELECT * FROM notificaciones WHERE id_notificacion = ?',
+                    [results.insertId],
+                    (selectErr, selectResults) => {
+                        if (!selectErr && selectResults.length > 0) {
+                            console.log(`📡 Enviando notificación directa vía SSE a ${sseClients.size} clientes conectados...`);
+                            // Enviar notificación a todos los clientes SSE conectados
+                            broadcastNotification(selectResults[0]);
+                            console.log(`✅ Notificación directa SSE enviada exitosamente`);
+                            resolve(selectResults[0]);
+                        } else {
+                            console.error('❌ Error al obtener notificación directa para SSE:', selectErr);
+                            reject(selectErr || new Error('No se pudo obtener la notificación creada'));
+                        }
+                    }
+                );
+            }
+        );
+    });
+}
