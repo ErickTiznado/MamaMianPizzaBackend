@@ -2,7 +2,7 @@ const axios = require('axios');
 
 const NOTIF_URL = process.env.NOTIF_URL;
 const NOTIF_KEY = process.env.NOTIF_KEY;
-const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3001';
+const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000';
 
 // Intentar importar el controlador de notificaciones para uso directo
 let notificationController = null;
