@@ -3,15 +3,16 @@
 ## Problema Identificado
 Las notificaciones SSE no llegaban al panel frontend en tiempo real debido a varios problemas:
 
-1. **Puerto incorrecto**: El cliente de notificaciones usaba puerto 3000 pero el servidor corre en 3001
+1. **Puerto incorrecto**: El cliente de notificaciones usaba puerto incorrecto
 2. **Problemas de scope**: Las funciones SSE estaban definidas después de ser referenciadas
 3. **Peticiones HTTP innecesarias**: Se hacían peticiones HTTP al mismo servidor causando delays
+4. **Entorno Docker**: El puerto configurado difiere entre desarrollo local y contenedor
 
 ## ✅ Cambios Realizados
 
 ### 1. Corregido puerto en notifications-client
 - **Archivo**: `packages/notifications-client/index.js`
-- **Cambio**: SERVER_URL ahora usa puerto 3001 por defecto
+- **Cambio**: SERVER_URL ahora usa puerto 3000 por defecto (compatible con Docker)
 
 ### 2. Reorganizado código SSE
 - **Archivo**: `contollers/notificationController.js`
@@ -25,26 +26,35 @@ Las notificaciones SSE no llegaban al panel frontend en tiempo real debido a var
 - **Primario**: Uso directo de la función (más rápido)
 - **Fallback**: HTTP si falla el método directo
 
-## 🧪 Cómo Probar la Solución
+## 🐳 Para Entorno Docker/Coolify
 
-### Opción 1: Página de Test SSE
-1. Abre el archivo `test-sse-notifications.html` en tu navegador
-2. Se conectará automáticamente al servidor SSE
-3. Debería mostrar "🟢 Conectado a SSE"
-
-### Opción 2: Script de Test Manual
+### Verificar servidor en contenedor:
 ```bash
-# Enviar una notificación de prueba
-node test-manual-notifications.js single
+# Conectarse al contenedor
+ps aux | grep node
 
-# Enviar múltiples notificaciones
-node test-manual-notifications.js multiple
-
-# Solo verificar estado del servidor
-node test-manual-notifications.js status
+# El servidor debería estar corriendo en PID 1
+# Puerto: Según variable de entorno PORT (usualmente 3000)
 ```
 
-### Opción 3: Test de Pedidos Simulados
+### Test específico para Docker:
+```bash
+node test-docker-notifications.js
+```
+
+## 🧪 Cómo Probar la Solución
+
+### Opción 1: Test en Docker (recomendado)
+```bash
+node test-docker-notifications.js
+```
+
+### Opción 2: Test manual local
+```bash
+node test-manual-notifications.js single
+```
+
+### Opción 3: Test de pedidos simulados
 ```bash
 node test/test-notifications-sse.js
 ```

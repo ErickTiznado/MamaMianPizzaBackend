@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍕 Test SSE - Mama Mian Pizza</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .connected { background: rgba(76, 175, 80, 0.3); }
+        .disconnected { background: rgba(244, 67, 54, 0.3); }
+        .notification {
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #ff6b35;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .notification-header {
+            font-weight: bold;
+            color: #ff6b35;
+        }
+        .notification-time {
+            font-size: 0.8em;
+            opacity: 0.7;
+        }
+        button {
+            background: #ff6b35;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 10px 5px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: #e55a2b;
+            transform: translateY(-2px);
+        }
+        #notifications {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-box {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #ff6b35;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍕 Test de Notificaciones SSE - Mama Mian Pizza</h1>
+        
+        <div id="status" class="status disconnected">
+            🔴 Desconectado del servidor SSE
+        </div>
+
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-number" id="totalNotifications">0</div>
+                <div>Notificaciones Recibidas</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number" id="connectionTime">--</div>
+                <div>Tiempo Conectado</div>
+            </div>
+        </div>
+
+        <div>
+            <button onclick="connectSSE()">🔗 Conectar SSE</button>
+            <button onclick="disconnectSSE()">🔌 Desconectar</button>
+            <button onclick="testNotification()">🧪 Enviar Test</button>
+            <button onclick="clearNotifications()">🗑️ Limpiar</button>
+        </div>
+
+        <h3>📬 Notificaciones en Tiempo Real:</h3>
+        <div id="notifications"></div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let notificationCount = 0;
+        let connectionStartTime = null;
+
+        // URLs para diferentes entornos
+        const PRODUCTION_URL = 'https://api.mamamianpizza.com';
+        const LOCAL_URL = 'http://localhost:3000';
+        
+        // Detectar el entorno
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const BASE_URL = isLocal ? LOCAL_URL : PRODUCTION_URL;
+
+        function updateStatus(connected, message) {
+            const statusEl = document.getElementById('status');
+            if (connected) {
+                statusEl.className = 'status connected';
+                statusEl.innerHTML = `🟢 ${message}`;
+                connectionStartTime = new Date();
+                updateConnectionTime();
+            } else {
+                statusEl.className = 'status disconnected';
+                statusEl.innerHTML = `🔴 ${message}`;
+                connectionStartTime = null;
+            }
+        }
+
+        function updateConnectionTime() {
+            if (connectionStartTime) {
+                const now = new Date();
+                const diff = Math.floor((now - connectionStartTime) / 1000);
+                const minutes = Math.floor(diff / 60);
+                const seconds = diff % 60;
+                document.getElementById('connectionTime').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                setTimeout(updateConnectionTime, 1000);
+            } else {
+                document.getElementById('connectionTime').textContent = '--';
+            }
+        }
+
+        function connectSSE() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            console.log(`🔗 Conectando a: ${BASE_URL}/api/notifications/stream`);
+            updateStatus(false, 'Conectando...');
+
+            eventSource = new EventSource(`${BASE_URL}/api/notifications/stream`);
+
+            eventSource.onopen = function(event) {
+                console.log('✅ Conexión SSE establecida', event);
+                updateStatus(true, `Conectado a SSE (${BASE_URL})`);
+            };
+
+            eventSource.onmessage = function(event) {
+                console.log('📨 Notificación recibida:', event.data);
+                
+                try {
+                    const notification = JSON.parse(event.data);
+                    addNotification(notification);
+                } catch (e) {
+                    console.log('📝 Mensaje SSE:', event.data);
+                }
+            };
+
+            eventSource.onerror = function(event) {
+                console.error('❌ Error en SSE:', event);
+                updateStatus(false, 'Error de conexión SSE');
+            };
+        }
+
+        function disconnectSSE() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            updateStatus(false, 'Desconectado del servidor SSE');
+        }
+
+        function addNotification(notification) {
+            notificationCount++;
+            document.getElementById('totalNotifications').textContent = notificationCount;
+
+            const notificationsEl = document.getElementById('notifications');
+            const notifEl = document.createElement('div');
+            notifEl.className = 'notification';
+            
+            const time = new Date().toLocaleTimeString();
+            notifEl.innerHTML = `
+                <div class="notification-header">${notification.titulo || 'Sin título'}</div>
+                <div>${notification.mensaje || 'Sin mensaje'}</div>
+                <div class="notification-time">🕒 ${time} | 🏷️ ${notification.tipo || 'sin tipo'} | 🆔 ${notification.id_notificacion || 'N/A'}</div>
+            `;
+
+            notificationsEl.insertBefore(notifEl, notificationsEl.firstChild);
+
+            // Mantener solo las últimas 10 notificaciones
+            while (notificationsEl.children.length > 10) {
+                notificationsEl.removeChild(notificationsEl.lastChild);
+            }
+        }
+
+        async function testNotification() {
+            try {
+                const response = await fetch(`${BASE_URL}/api/notifications`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        titulo: '🧪 Test desde Frontend',
+                        mensaje: `Test enviado el ${new Date().toLocaleTimeString()}`,
+                        tipo: 'test'
+                    })
+                });
+
+                if (response.ok) {
+                    console.log('✅ Test enviado correctamente');
+                } else {
+                    console.error('❌ Error enviando test:', await response.text());
+                }
+            } catch (error) {
+                console.error('❌ Error en test:', error);
+            }
+        }
+
+        function clearNotifications() {
+            document.getElementById('notifications').innerHTML = '';
+            notificationCount = 0;
+            document.getElementById('totalNotifications').textContent = '0';
+        }
+
+        // Conectar automáticamente al cargar la página
+        window.onload = function() {
+            console.log(`🌐 Entorno detectado: ${isLocal ? 'Local' : 'Producción'}`);
+            console.log(`🔗 URL base: ${BASE_URL}`);
+            connectSSE();
+        };
+
+        // Limpiar al cerrar la página
+        window.onbeforeunload = function() {
+            disconnectSSE();
+        };
+    </script>
+</body>
+</html>

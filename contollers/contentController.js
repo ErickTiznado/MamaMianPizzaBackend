@@ -233,7 +233,10 @@ exports.submitContent = (req, res) => {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
     }
 
-    const activo = req.body.activo === 'true' || req.body.activo === true;
+    // Para nuevos productos, establecer activo=1 por defecto si no se especifica
+    const activo = req.body.activo !== undefined 
+      ? (req.body.activo === 'true' || req.body.activo === true)
+      : true; // Por defecto activo=1 para nuevos productos
     const imagenPath = req.file
       ? `${SERVER_BASE_URL}/uploads/${req.file.filename}`
       : null;
@@ -458,7 +461,14 @@ exports.getMenu = (req, res) => {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
     }
 
-    const activo = req.body.activo === 'true' || req.body.activo === true;
+    // Solo actualizar 'activo' si se proporciona explícitamente en el body
+    let activoValue = null;
+    let shouldUpdateActivo = false;
+    
+    if (req.body.activo !== undefined) {
+      activoValue = req.body.activo === 'true' || req.body.activo === true;
+      shouldUpdateActivo = true;
+    }
     const imagenPath = req.file
       ? `${SERVER_BASE_URL}/uploads/${req.file.filename}`
       : null;
@@ -468,11 +478,23 @@ exports.getMenu = (req, res) => {
       if (err) return res.status(500).json({ message: 'Error al procesar la categoría' });
 
       // 1) Actualizar datos básicos de la pizza
-      pool.query(
-        `UPDATE productos SET
+      let updateQuery, updateParams;
+      
+      if (shouldUpdateActivo) {
+        // Actualizar incluyendo el campo activo
+        updateQuery = `UPDATE productos SET
            titulo = ?, descripcion = ?, seccion = ?, id_categoria = ?, activo = ?, imagen = COALESCE(?, imagen), fecha_actualizacion = ?
-         WHERE id_producto = ?`,
-        [titulo, descripcion, sesion, idcategoria, activo, imagenPath, actDate, id_producto],        err => {
+         WHERE id_producto = ?`;
+        updateParams = [titulo, descripcion, sesion, idcategoria, activoValue, imagenPath, actDate, id_producto];
+      } else {
+        // Actualizar sin modificar el campo activo
+        updateQuery = `UPDATE productos SET
+           titulo = ?, descripcion = ?, seccion = ?, id_categoria = ?, imagen = COALESCE(?, imagen), fecha_actualizacion = ?
+         WHERE id_producto = ?`;
+        updateParams = [titulo, descripcion, sesion, idcategoria, imagenPath, actDate, id_producto];
+      }
+      
+      pool.query(updateQuery, updateParams,        err => {
           if (err) {
             console.error(err);
             // Log product update error

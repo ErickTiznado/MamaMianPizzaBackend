@@ -6,7 +6,14 @@ const sseClients = new Set();
 
 // Función para enviar notificación a todos los clientes SSE conectados
 function broadcastNotification(notification) {
-    console.log(`📡 Broadcasting notificación a ${sseClients.size} clientes SSE:`, notification);
+    console.log(`📡 =================== BROADCAST NOTIFICATION ===================`);
+    console.log(`📡 Intentando enviar notificación a ${sseClients.size} clientes SSE`);
+    console.log(`📋 Notificación:`, {
+        id: notification.id_notificacion,
+        titulo: notification.titulo,
+        mensaje: notification.mensaje,
+        tipo: notification.tipo
+    });
     
     if (sseClients.size === 0) {
         console.log('⚠️ No hay clientes SSE conectados para recibir la notificación');
@@ -15,19 +22,44 @@ function broadcastNotification(notification) {
     
     let successCount = 0;
     let errorCount = 0;
+    let clientIndex = 0;
     
     sseClients.forEach(client => {
+        clientIndex++;
+        console.log(`📤 Enviando a cliente ${clientIndex}...`);
+        console.log(`   - Cliente writable: ${client.writable}`);
+        console.log(`   - Cliente destroyed: ${client.destroyed}`);
+        
         try {
-            client.write(`data: ${JSON.stringify(notification)}\n\n`);
-            successCount++;
+            if (client.writable && !client.destroyed) {
+                const data = `data: ${JSON.stringify(notification)}\n\n`;
+                console.log(`   - Datos a enviar: ${data.substring(0, 100)}...`);
+                
+                client.write(data);
+                console.log(`   - ✅ Enviado exitosamente a cliente ${clientIndex}`);
+                successCount++;
+                
+                // Verificar que el cliente siga siendo válido después del write
+                console.log(`   - Cliente después del write - writable: ${client.writable}, destroyed: ${client.destroyed}`);
+            } else {
+                console.log(`   - ⚠️ Cliente ${clientIndex} no está disponible (writable: ${client.writable}, destroyed: ${client.destroyed})`);
+                console.log(`   - 🗑️ Removiendo cliente inválido`);
+                sseClients.delete(client);
+                errorCount++;
+            }
         } catch (error) {
-            console.error('❌ Error enviando notificación SSE a cliente:', error);
+            console.error(`   - ❌ Error enviando a cliente ${clientIndex}:`, error.message);
+            console.log(`   - 🗑️ Removiendo cliente con error`);
             sseClients.delete(client);
             errorCount++;
         }
     });
     
-    console.log(`✅ Notificación SSE enviada: ${successCount} exitosos, ${errorCount} errores`);
+    console.log(`📊 Resultado del broadcast:`);
+    console.log(`   - ✅ Exitosos: ${successCount}`);
+    console.log(`   - ❌ Errores: ${errorCount}`);
+    console.log(`   - 👥 Clientes restantes: ${sseClients.size}`);
+    console.log(`📡 ================ FIN BROADCAST NOTIFICATION ==================`);
 }
 
 // Obtener todas las notificaciones
@@ -234,37 +266,74 @@ exports.getNotificationStream = (req, res) => {
     res.write(': SSE connection established\n\n');
     console.log('✅ Conexión SSE establecida');
 
+    // IMPORTANTE: Verificar que res.write funcione
+    console.log(`🔧 Response writable: ${res.writable}`);
+    console.log(`🔧 Response destroyed: ${res.destroyed}`);
+
     // Agregar cliente a la lista de conexiones activas
     sseClients.add(res);
-    console.log(`📊 Clientes SSE conectados: ${sseClients.size}`);
+    console.log(`📊 Cliente SSE agregado. Total clientes conectados: ${sseClients.size}`);
+    
+    // Log detallado de clientes conectados
+    console.log(`📊 Estado de clientes SSE:`);
+    let clientIndex = 0;
+    sseClients.forEach(client => {
+        console.log(`  Cliente ${++clientIndex}: writable=${client.writable}, destroyed=${client.destroyed}`);
+    });
 
     // Enviar notificaciones no leídas al conectarse
     pool.query("SELECT * FROM notificaciones WHERE estado = 'no leida' ORDER BY fecha_emision DESC", (err, results) => {
         if (!err && results.length > 0) {
             console.log(`📬 Enviando ${results.length} notificaciones no leídas al nuevo cliente`);
-            results.forEach(notification => {
+            results.forEach((notification, index) => {
                 try {
-                    res.write(`data: ${JSON.stringify(notification)}\n\n`);
+                    const data = `data: ${JSON.stringify(notification)}\n\n`;
+                    console.log(`📤 Enviando notificación ${index + 1}/${results.length} al cliente:`, notification.titulo);
+                    res.write(data);
+                    console.log(`✅ Notificación ${index + 1} enviada exitosamente`);
                 } catch (error) {
-                    console.error('❌ Error enviando notificación inicial:', error);
+                    console.error(`❌ Error enviando notificación inicial ${index + 1}:`, error);
                 }
             });
         } else if (err) {
             console.error('❌ Error obteniendo notificaciones no leídas:', err);
         } else {
             console.log('📬 No hay notificaciones no leídas para enviar');
+            // Enviar un mensaje de test para verificar que la conexión funciona
+            try {
+                const testMessage = {
+                    id_notificacion: 'test',
+                    titulo: '🟢 Conexión SSE establecida',
+                    mensaje: 'Conexión SSE funcionando correctamente',
+                    tipo: 'system',
+                    fecha_emision: new Date().toISOString(),
+                    estado: 'leida'
+                };
+                res.write(`data: ${JSON.stringify(testMessage)}\n\n`);
+                console.log('📤 Mensaje de test SSE enviado');
+            } catch (error) {
+                console.error('❌ Error enviando mensaje de test:', error);
+            }
         }
     });
 
     // Manejar desconexión del cliente
     req.on('close', () => {
-        sseClients.delete(res);
-        console.log(`🔌 Cliente SSE desconectado. Clientes restantes: ${sseClients.size}`);
+        console.log(`🔌 Cliente SSE desconectado (evento close)`);
+        const removed = sseClients.delete(res);
+        console.log(`�️ Cliente removido: ${removed}. Clientes restantes: ${sseClients.size}`);
     });
 
-    req.on('error', () => {
-        sseClients.delete(res);
-        console.log(`❌ Error en conexión SSE. Clientes restantes: ${sseClients.size}`);
+    req.on('error', (error) => {
+        console.log(`❌ Error en conexión SSE:`, error.message);
+        const removed = sseClients.delete(res);
+        console.log(`🗑️ Cliente removido por error: ${removed}. Clientes restantes: ${sseClients.size}`);
+    });
+    
+    res.on('error', (error) => {
+        console.log(`❌ Error en response SSE:`, error.message);
+        const removed = sseClients.delete(res);
+        console.log(`🗑️ Cliente removido por error en response: ${removed}. Clientes restantes: ${sseClients.size}`);
     });
 };
 
