@@ -344,59 +344,107 @@ exports.getRecomendacionDeLacasa = (req, res) => {
     }
 
 exports.getMenu = (req, res) => {
-  const sql = `
+  // Primero obtenemos todos los productos activos
+  const productosQuery = `
     SELECT 
       p.id_producto,
       p.titulo,
       p.descripcion,
       p.imagen,
       p.activo,
-      c.nombre    AS categoria,
-      c.descripcion AS categoria_descripcion,
-      t.id_tamano,
-      t.nombre    AS tamano,
-      t.indice    AS orden_tamano,
-      pr.precio
+      p.seccion,
+      c.nombre AS categoria,
+      c.descripcion AS categoria_descripcion
     FROM productos p
-    JOIN precios pr ON p.id_producto = pr.pizza_id
-    JOIN tamanos t  ON pr.tamano_id   = t.id_tamano
-    JOIN categorias c ON p.id_categoria = c.id_categoria
+    LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
     WHERE p.activo = 1
-    ORDER BY p.id_producto, t.indice;
-  `;  pool.query(sql, (err, rows) => {    if (err) {
+    ORDER BY p.id_producto
+  `;
+
+  pool.query(productosQuery, (err, productos) => {
+    if (err) {
       console.error(err);
       // Log menu query error
       const descripcionLog = `Error al consultar el menú - ${err.message}`;
       logAction(req, 'READ_ERROR', 'productos', descripcionLog);
       return res.status(500).json({ message: 'Error al obtener el menú' });
     }
-      // Log successful menu query
-    const descripcionLog = `Menú consultado exitosamente - ${rows.length} registros de productos activos encontrados`;
-    logAction(req, 'READ', 'productos', descripcionLog);
-    
-    // Agrupamos por pizza
-    const mapa = {};
-    rows.forEach(r => {
-      if (!mapa[r.id_producto]) {
-        mapa[r.id_producto] = {
-          id: r.id_producto,
-          titulo: r.titulo,
-          descripcion: r.descripcion,
-          imagen: r.imagen,
-          activo: r.activo,
-          categoria: r.categoria,
-          categoria_descripcion: r.categoria_descripcion,
-          opciones: []
+
+    if (productos.length === 0) {
+      const descripcionLog = `Menú consultado exitosamente - 0 productos activos encontrados`;
+      logAction(req, 'READ', 'productos', descripcionLog);
+      return res.status(200).json({ message: 'Menú cargado', menu: [] });
+    }
+
+    // Para cada producto, obtenemos sus precios si los tiene
+    const menu = [];
+    let productosCompletados = 0;
+
+    productos.forEach((producto) => {
+      // Buscar precios para este producto (solo para pizzas)
+      const preciosQuery = `
+        SELECT 
+          t.id_tamano,
+          t.nombre AS tamano,
+          t.indice AS orden_tamano,
+          pr.precio
+        FROM precios pr
+        JOIN tamanos t ON pr.tamano_id = t.id_tamano
+        WHERE pr.pizza_id = ?
+        ORDER BY t.indice
+      `;
+
+      pool.query(preciosQuery, [producto.id_producto], (err, precios) => {
+        if (err) {
+          console.error(`Error al obtener precios para producto ${producto.id_producto}:`, err);
+          precios = []; // Si hay error, continuar sin precios
+        }
+
+        // Crear el objeto del producto para el menú
+        const productoMenu = {
+          id: producto.id_producto,
+          titulo: producto.titulo,
+          descripcion: producto.descripcion,
+          imagen: producto.imagen,
+          activo: producto.activo,
+          categoria: producto.categoria,
+          categoria_descripcion: producto.categoria_descripcion,
+          seccion: producto.seccion,
+          opciones: precios.map(precio => ({
+            tamanoId: precio.id_tamano,
+            nombre: precio.tamano,
+            precio: parseFloat(precio.precio)
+          }))
         };
-      }
-      mapa[r.id_producto].opciones.push({
-        tamanoId: r.id_tamano,
-        nombre:   r.tamano,
-        precio:   parseFloat(r.precio)
+
+        // Si no tiene precios, agregar opciones vacías (para complementos, bebidas, etc.)
+        if (precios.length === 0) {
+          productoMenu.opciones = [];
+        }
+
+        menu.push(productoMenu);
+        productosCompletados++;
+
+        // Si ya procesamos todos los productos, enviar respuesta
+        if (productosCompletados === productos.length) {
+          // Ordenar el menú por ID de producto
+          menu.sort((a, b) => a.id - b.id);
+
+          const descripcionLog = `Menú consultado exitosamente - ${productos.length} productos activos encontrados (incluyendo pizzas, complementos y otros productos)`;
+          logAction(req, 'READ', 'productos', descripcionLog);
+
+          res.status(200).json({ 
+            message: 'Menú cargado', 
+            menu: menu,
+            estadisticas: {
+              total_productos: productos.length,
+              productos_con_precios: menu.filter(p => p.opciones.length > 0).length,
+              productos_sin_precios: menu.filter(p => p.opciones.length === 0).length
+            }
+          });
+        }
       });
     });
-    const menu = Object.values(mapa);
-    res.status(200).json({ message: 'Menú cargado', menu });
   });
 };
 
@@ -430,6 +478,114 @@ exports.getMenu = (req, res) => {
             });
         });
     };
+
+// Nuevo endpoint: Obtener TODOS los productos (activos e inactivos) con todos sus campos
+exports.getAllProducts = (req, res) => {
+    const sql = `
+        SELECT 
+            p.id_producto,
+            p.titulo,
+            p.descripcion,
+            p.seccion,
+            p.activo,
+            p.imagen,
+            p.fecha_creacion,
+            p.fecha_actualizacion,
+            c.id_categoria,
+            c.nombre AS categoria,
+            c.descripcion AS categoria_descripcion
+        FROM productos p
+        LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+        ORDER BY p.fecha_creacion DESC, p.id_producto DESC
+    `;
+
+    pool.query(sql, (err, productos) => {
+        if (err) {
+            console.error('Error al obtener todos los productos:', err);
+            const descripcionLog = `Error al consultar todos los productos - ${err.message}`;
+            logAction(req, 'READ_ERROR', 'productos', descripcionLog);
+            return res.status(500).json({ message: 'Error al obtener todos los productos' });
+        }
+
+        // Para cada producto, obtener sus precios si los tiene
+        const productosConPrecios = [];
+        let productosCompletados = 0;
+
+        if (productos.length === 0) {
+            const descripcionLog = `Consulta de todos los productos completada - 0 productos encontrados`;
+            logAction(req, 'READ', 'productos', descripcionLog);
+            return res.status(200).json({ 
+                message: 'Consulta exitosa', 
+                productos: [],
+                total: 0
+            });
+        }
+
+        productos.forEach((producto, index) => {
+            // Buscar precios para este producto
+            const preciosQuery = `
+                SELECT 
+                    pr.precio,
+                    t.id_tamano,
+                    t.nombre AS tamano,
+                    t.indice AS orden_tamano
+                FROM precios pr
+                JOIN tamanos t ON pr.tamano_id = t.id_tamano
+                WHERE pr.pizza_id = ?
+                ORDER BY t.indice
+            `;
+
+            pool.query(preciosQuery, [producto.id_producto], (err, precios) => {
+                if (err) {
+                    console.error(`Error al obtener precios para producto ${producto.id_producto}:`, err);
+                    precios = []; // Si hay error, continuar sin precios
+                }
+
+                // Agregar precios al producto
+                producto.precios = precios.map(precio => ({
+                    tamanoId: precio.id_tamano,
+                    tamano: precio.tamano,
+                    precio: parseFloat(precio.precio),
+                    orden: precio.orden_tamano
+                }));
+
+                productosConPrecios.push(producto);
+                productosCompletados++;
+
+                // Si ya procesamos todos los productos, enviar respuesta
+                if (productosCompletados === productos.length) {
+                    // Ordenar los productos por el orden original
+                    productosConPrecios.sort((a, b) => {
+                        // Primero por fecha de creación (más reciente primero)
+                        const fechaA = new Date(a.fecha_creacion);
+                        const fechaB = new Date(b.fecha_creacion);
+                        if (fechaB.getTime() !== fechaA.getTime()) {
+                            return fechaB.getTime() - fechaA.getTime();
+                        }
+                        // Si las fechas son iguales, por ID descendente
+                        return b.id_producto - a.id_producto;
+                    });
+
+                    const descripcionLog = `Todos los productos consultados exitosamente - ${productos.length} productos encontrados (${productos.filter(p => p.activo).length} activos, ${productos.filter(p => !p.activo).length} inactivos)`;
+                    logAction(req, 'READ', 'productos', descripcionLog);
+
+                    res.status(200).json({ 
+                        message: 'Todos los productos obtenidos exitosamente', 
+                        productos: productosConPrecios,
+                        total: productos.length,
+                        estadisticas: {
+                            total: productos.length,
+                            activos: productos.filter(p => p.activo).length,
+                            inactivos: productos.filter(p => !p.activo).length,
+                            con_precios: productosConPrecios.filter(p => p.precios.length > 0).length,
+                            sin_precios: productosConPrecios.filter(p => p.precios.length === 0).length
+                        }
+                    });
+                }
+            });
+        });
+    });
+};
 
     exports.TotalProducts = (req, res) => {
         pool.query('SELECT COUNT(*) as total FROM productos', (err, results) => {            if(err){

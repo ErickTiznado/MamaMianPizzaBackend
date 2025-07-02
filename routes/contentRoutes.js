@@ -9,6 +9,7 @@ const { verifyAdminToken } = require('../contollers/authController');
 router.get('/MostPopular', contentController.getLasMasPopulares);
 router.get('/recomendacion', contentController.getRecomendacionDeLacasa);
 router.get('/getMenu', contentController.getMenu);
+router.get('/getAllProducts', contentController.getAllProducts); // Nuevo endpoint para todos los productos
 router.get('/totalProducts', contentController.TotalProducts);
 
 // ============================
