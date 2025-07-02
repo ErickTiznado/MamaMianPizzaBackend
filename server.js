@@ -9,6 +9,7 @@ const pool = require('./config/db');
 const userRoutes = require('./routes/userRoutes');
 const contentRoutes = require('./routes/contentRoutes');
 const inventoriRoutes = require('./routes/inventoriRoutes');
+const pizzaIngredientsRoutes = require('./routes/pizzaIngredientsRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const reportRoutes = require('./routes/reportRoutes');
@@ -89,6 +90,7 @@ pool.getConnection((err, connection) => {
 app.use('/api/users', userRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/inventory', inventoriRoutes);
+app.use('/api/pizza-ingredients', pizzaIngredientsRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/reportes', reportRoutes);
