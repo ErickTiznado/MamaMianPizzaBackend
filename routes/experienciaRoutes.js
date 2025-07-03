@@ -14,6 +14,9 @@ router.get('/user/:id_usuario', experienciaController.getExperienciasByUser);
 // GET - Get experiences by approval status (0 = not approved, 1 = approved)
 router.get('/status/:aprobado', experienciaController.getExperienciasByApprovalStatus);
 
+// GET - Get a single experience by ID
+router.get('/:id_experiencia', experienciaController.getExperienciaById);
+
 // PUT - Update an experience
 router.put('/:id_experiencia', experienciaController.updateExperiencia);
 

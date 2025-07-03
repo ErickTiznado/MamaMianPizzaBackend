@@ -127,6 +127,75 @@ exports.createExperiencia = async (req, res) => {
     }
 };
 
+// Function to get a single experience by ID
+exports.getExperienciaById = async (req, res) => {
+    try {
+        const { id_experiencia } = req.params;
+        
+        // Validate required parameter
+        if (!id_experiencia) {
+            return res.status(400).json({
+                message: 'ID de experiencia requerido'
+            });
+        }
+        
+        // Validate data type
+        if (!Number.isInteger(parseInt(id_experiencia))) {
+            return res.status(400).json({
+                message: 'id_experiencia debe ser un número entero'
+            });
+        }
+        
+        const connection = await pool.promise().getConnection();
+        
+        try {
+            // Get the experience with user info
+            const [experience] = await connection.query(`
+                SELECT 
+                    e.*,
+                    u.nombre as nombre_usuario,
+                    u.foto_perfil as foto_perfil_usuario
+                FROM experiencia e
+                JOIN usuarios u ON e.id_usuario = u.id_usuario
+                WHERE e.id_experiencia = ?
+            `, [id_experiencia]);
+            
+            if (experience.length === 0) {
+                return res.status(404).json({
+                    message: `No se encontró una experiencia con el ID ${id_experiencia}`
+                });
+            }
+            
+            res.status(200).json({
+                message: 'Experiencia obtenida exitosamente',
+                experiencia: {
+                    id_experiencia: experience[0].id_experiencia,
+                    titulo: experience[0].titulo,
+                    valoracion: experience[0].valoracion,
+                    contenido: experience[0].contenido,
+                    aprobado: experience[0].aprobado,
+                    estado: experience[0].aprobado === 1 ? 'aprobada' : 'pendiente',
+                    usuario: {
+                        id: experience[0].id_usuario,
+                        nombre: experience[0].nombre_usuario,
+                        foto_perfil: experience[0].foto_perfil_usuario
+                    }
+                }
+            });
+            
+        } finally {
+            connection.release();
+        }
+        
+    } catch (error) {
+        console.error('Error al obtener experiencia por ID:', error);
+        res.status(500).json({
+            message: 'Error interno del servidor al obtener la experiencia',
+            error: error.message
+        });
+    }
+};
+
 // Function to get all experiences
 exports.getAllExperiencias = async (req, res) => {
     try {

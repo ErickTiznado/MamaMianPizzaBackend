@@ -719,7 +719,7 @@ exports.requestPasswordResetAdmin = async (req, res) => {
                 // Delete any existing password reset for this admin
                 pool.query(
                     'DELETE FROM password_reset WHERE user_id = ? AND user_type = ?',
-                    [admin.id_admin, 'administrador'],
+                    [admin.id_admin, 'admin'],
                     (deleteErr) => {
                         if (deleteErr) {
                             console.error('Error al limpiar código existente:', deleteErr);
@@ -728,7 +728,7 @@ exports.requestPasswordResetAdmin = async (req, res) => {
                         // Insert new password reset code
                         pool.query(
                             'INSERT INTO password_reset (user_id, user_type, reset_code, expiracion, used) VALUES (?, ?, ?, ?, ?)',
-                            [admin.id_admin, 'administrador', otp, expiresAt, 0],
+                            [admin.id_admin, 'admin', otp, expiresAt, 0],
                             async (insertErr) => {
                                 if (insertErr) {
                                     console.error('Error al guardar código de restablecimiento:', insertErr);
@@ -750,12 +750,12 @@ exports.requestPasswordResetAdmin = async (req, res) => {
                                             correo: admin.correo.replace(/(.{2}).*@/, '$1***@'), // Mask email
                                             validez_minutos: 10,
                                             timestamp: new Date().toISOString(),
-                                            tipo_usuario: 'administrador'
+                                            tipo_usuario: 'admin'
                                         });
                                     } else {
                                         // Si falla el envío del correo, eliminar el código de la BD
                                         pool.query('DELETE FROM password_reset WHERE user_id = ? AND user_type = ?', 
-                                            [admin.id_admin, 'administrador']);
+                                            [admin.id_admin, 'admin']);
                                         
                                         return res.status(500).json({
                                             success: false,
@@ -770,7 +770,7 @@ exports.requestPasswordResetAdmin = async (req, res) => {
                                     
                                     // Delete the reset code if email failed
                                     pool.query('DELETE FROM password_reset WHERE user_id = ? AND user_type = ?', 
-                                        [admin.id_admin, 'administrador']);
+                                        [admin.id_admin, 'admin']);
                                     
                                     return res.status(500).json({
                                         success: false,
@@ -828,7 +828,7 @@ exports.verifyResetOTPAdmin = async (req, res) => {
             AND pr.reset_code = ?
             AND pr.expiracion > NOW()
             AND pr.used = 0
-            AND pr.user_type = 'administrador'
+            AND pr.user_type = 'admin'
         `, [correo, otp], (err, results) => {
             if (err) {
                 console.error('Error al verificar código de restablecimiento ADMIN:', err);
@@ -851,7 +851,7 @@ exports.verifyResetOTPAdmin = async (req, res) => {
             // Mark reset code as used
             pool.query(
                 'UPDATE password_reset SET used = 1 WHERE user_id = ? AND reset_code = ? AND user_type = ?',
-                [admin.id_admin, otp, 'administrador'],
+                [admin.id_admin, otp, 'admin'],
                 (updateErr) => {
                     if (updateErr) {
                         console.error('Error al marcar código ADMIN como usado:', updateErr);
@@ -863,7 +863,7 @@ exports.verifyResetOTPAdmin = async (req, res) => {
                 message: 'Código de administrador verificado correctamente',
                 token: resetToken,
                 expires_in: '15 minutos',
-                tipo_usuario: 'administrador',
+                tipo_usuario: 'admin',
                 token_type: 'JWT'
             });
         });
