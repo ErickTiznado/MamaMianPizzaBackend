@@ -75,6 +75,33 @@ async function executeCleanup() {
     console.log(`${colors.cyan}Conectado a la base de datos: ${process.env.BD_NAME}${colors.reset}`);
     console.log(`${colors.blue}Iniciando limpieza de la base de datos...${colors.reset}`);
     
+    // Verificar que existan usuarios y administradores primero
+    const [verificationResults] = await connection.execute("SELECT COUNT(*) as count FROM usuarios;");
+    const userCount = verificationResults[0].count;
+    
+    const [adminResults] = await connection.execute("SELECT COUNT(*) as count FROM administradores;");
+    const adminCount = adminResults[0].count;
+    
+    if (userCount === 0 || adminCount === 0) {
+      console.error(`${colors.red}
+      ❌ ERROR: No hay suficientes datos para continuar.
+      - Usuarios encontrados: ${userCount}
+      - Administradores encontrados: ${adminCount}
+      
+      No se puede limpiar la BD porque no existen usuarios o administradores.
+      Este script está diseñado para preservar esos datos, pero no existen.
+      ${colors.reset}`);
+      
+      await connection.end();
+      process.exit(1);
+    }
+    
+    console.log(`${colors.green}
+    ✅ Verificación completada:
+    - Usuarios encontrados: ${userCount}
+    - Administradores encontrados: ${adminCount}
+    ${colors.reset}`);
+
     // Ejecutar cada instrucción SQL
     for(const statement of sqlStatements) {
       try {

@@ -4,14 +4,15 @@
 -- Ejecutar con precaución en entornos de producción
 
 -- Verificar que existan usuarios antes de limpiar (safeguard)
+-- Usamos un enfoque compatible con versiones anteriores de MySQL
 SELECT COUNT(*) INTO @user_count FROM usuarios;
 SELECT COUNT(*) INTO @admin_count FROM administradores;
 
--- Si no hay usuarios o administradores, detener el script
-SELECT IF(@user_count = 0 OR @admin_count = 0, 
-          SIGNAL SQLSTATE '45000' 
-          SET MESSAGE_TEXT = 'No se puede limpiar la BD porque no hay usuarios o administradores.', 
-          'Usuarios y administradores verificados.') as validacion;
+-- Mostrar conteo de usuarios y administradores para verificación
+SELECT @user_count AS 'Total Usuarios', @admin_count AS 'Total Administradores', 
+       CONCAT('Verificación completada - ', 
+              IF(@user_count > 0 AND @admin_count > 0, 'OK para continuar', 
+                 'ADVERTENCIA: Faltan usuarios o administradores')) as 'Estado';
 
 -- Desactivar restricciones de clave foránea temporalmente
 SET FOREIGN_KEY_CHECKS = 0;
@@ -91,6 +92,7 @@ SELECT 'Usuarios mantenidos' as entidad, COUNT(*) as total FROM usuarios;
 SELECT 'Administradores mantenidos' as entidad, COUNT(*) as total FROM administradores;
 SELECT 'Productos mantenidos' as entidad, COUNT(*) as total FROM productos;
 SELECT 'Categorías mantenidas' as entidad, COUNT(*) as total FROM categorias;
+SELECT 'Pedidos eliminados' as entidad, COUNT(*) as total FROM pedidos;
 
 -- -----------------------------------------------------
 -- Registrar la limpieza en logs
