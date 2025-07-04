@@ -223,14 +223,45 @@ exports.submitContent = (req, res) => {
       return res.status(500).json({ message: 'Error al subir la imagen: ' + err.message });
     }
 
-    const { titulo, descripcion, categoria, sesion, precios } = req.body;
-    // precios debe venir como objeto: { "1": "6.00", "2": "8.00", ... }
-    const preciosObj = typeof precios === 'string'
-      ? JSON.parse(precios)
-      : precios;
+    const { titulo, descripcion, categoria, sesion, precios, precio, precio_unico } = req.body;
+    
+    // Detectamos si es un complemento (aceptar 'complemento' o 'complementos')
+    const esComplemento = categoria && 
+                        (categoria.toLowerCase() === 'complementos' || 
+                         categoria.toLowerCase() === 'complemento');
+    
+    // Para complementos, podemos recibir el precio como un único valor
+    let preciosObj = {};
+    
+    if (precios) {
+      // precios debe venir como objeto: { "1": "6.00", "2": "8.00", ... }
+      preciosObj = typeof precios === 'string'
+        ? JSON.parse(precios)
+        : precios;
+    }
+    
+    // Para complementos, verificamos específicamente el campo precio_unico 
+    // que viene de la UI como se mostró en el ejemplo
+    if (esComplemento && precio_unico && Object.keys(preciosObj).length === 0) {
+      console.log(`🔍 Complemento detectado con precio_unico: ${precio_unico}`);
+      preciosObj = { "1": precio_unico };
+    } else if (esComplemento && precio && Object.keys(preciosObj).length === 0) {
+      // Si es complemento y viene un precio único, lo asignamos al tamaño estándar (id=1)
+      console.log(`🔍 Complemento detectado con precio: ${precio}`);
+      preciosObj = { "1": precio };
+    }
 
-    if (!titulo || !descripcion || !sesion || !categoria || !preciosObj) {
+    if (!titulo || !descripcion || !sesion || !categoria) {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
+    }
+    
+    // Log de debug para ver todos los campos cuando es un complemento
+    if (esComplemento) {
+      console.log('📋 Datos de complemento recibidos:');
+      console.log('- Título:', titulo);
+      console.log('- Categoría:', categoria);
+      console.log('- Precio único:', precio_unico);
+      console.log('- Precios obj:', preciosObj);
     }
 
     // Para nuevos productos, establecer activo=1 por defecto si no se especifica
@@ -262,8 +293,45 @@ exports.submitContent = (req, res) => {
           const pizzaId = result.insertId;
 
           // 2) Insertamos los precios para cada tamaño
-          const entries = Object.entries(preciosObj);
+          let entries = Object.entries(preciosObj);
           let pendientes = entries.length, fallo = false;
+
+          // Comprobar si es un complemento (aceptar 'complemento' o 'complementos')
+          const esComplemento = categoria.toLowerCase() === 'complementos' || 
+                              categoria.toLowerCase() === 'complemento';
+          
+          console.log(`🧾 Procesando producto "${titulo}" (${categoria}) con ${entries.length} precios`);
+          
+          // Si es complemento y no tiene entradas de precio, buscamos específicamente precio_unico
+          if (esComplemento && entries.length === 0) {
+            // Primero buscamos en precio_unico que es el campo principal para complementos
+            if (req.body.precio_unico && !isNaN(parseFloat(req.body.precio_unico))) {
+              const precioValor = parseFloat(req.body.precio_unico);
+              console.log(`💰 Encontrado precio_unico para complemento: ${precioValor}`);
+              entries = [['1', precioValor]]; // Tamaño estándar (id=1)
+              pendientes = 1;
+            } 
+            // Si no hay precio_unico, buscamos en otros campos posibles
+            else {
+              const camposPosibles = ['precio', 'precioUnico', 'precioComplemento', 'value'];
+              
+              for (const campo of camposPosibles) {
+                if (req.body[campo] && !isNaN(parseFloat(req.body[campo]))) {
+                  const precioValor = parseFloat(req.body[campo]);
+                  console.log(`💰 Encontrado precio para complemento en campo ${campo}: ${precioValor}`);
+                  entries = [['1', precioValor]]; // Tamaño estándar (id=1)
+                  pendientes = 1;
+                  break;
+                }
+              }
+            }
+            
+            // Si aún no tenemos precio, imprimimos todo el cuerpo para debug
+            if (entries.length === 0) {
+              console.log('🔍 Contenido completo del formulario para depuración:');
+              console.log(req.body);
+            }
+          }
 
           entries.forEach(([tamanoId, precio]) => {
             pool.query(
@@ -291,16 +359,64 @@ exports.submitContent = (req, res) => {
               }            );
           });
 
-          // Si no hay tamaños (no debería pasar), devolvemos ya:
+          // Si no hay tamaños, tenemos que tomar una decisión
           if (entries.length === 0) {
-            // Log product creation without prices
-            const descripcionLog = `Producto creado sin precios: "${titulo}" (ID: ${pizzaId}) en categoría "${categoria}"`;
-            logAction(req, 'CREATE', 'productos', descripcionLog);
-            
-            res.status(201).json({
-              message: 'Producto creado sin precios (ajusta tu formulario)',
-              id_producto: pizzaId
-            });
+            // Para complementos, insertamos un precio predeterminado 
+            if (esComplemento) {
+              console.log(`⚠️ Complemento sin precio detectado: "${titulo}" (ID: ${pizzaId}) - Insertando precio predeterminado`);
+              
+              // Último intento: buscar precio_unico específicamente o en otros campos del req.body
+              let precioEncontrado = 0;
+              
+              // Primero buscamos específicamente en precio_unico
+              if (req.body.precio_unico && !isNaN(parseFloat(req.body.precio_unico))) {
+                precioEncontrado = parseFloat(req.body.precio_unico);
+                console.log(`💲 Encontrado precio_unico: ${precioEncontrado}`);
+              } 
+              // Si no existe, buscamos en cualquier otro campo que pueda contener un precio
+              else {
+                for (const [key, value] of Object.entries(req.body)) {
+                  if (typeof value === 'string' && !isNaN(parseFloat(value)) && 
+                      (key.toLowerCase().includes('prec') || key.toLowerCase().includes('valor'))) {
+                    precioEncontrado = parseFloat(value);
+                    console.log(`💲 Encontrado valor numérico en campo ${key}: ${precioEncontrado}`);
+                    break;
+                  }
+                }
+              }
+              
+              // Si aún no hay precio, usamos un valor por defecto (pero marcamos como error)
+              const precioFinal = precioEncontrado || 0;
+              
+              // Insertamos el precio predeterminado para complementos
+              pool.query(
+                `INSERT INTO precios (pizza_id, tamano_id, precio) VALUES (?, ?, ?)`,
+                [pizzaId, 1, precioFinal], // 1 = tamaño estándar
+                (err) => {
+                  if (err) {
+                    console.error('Error al insertar precio predeterminado para complemento', err);
+                  }
+                  
+                  const descripcionLog = `Complemento creado con precio predeterminado: "${titulo}" (ID: ${pizzaId}) - Precio: ${precioFinal}`;
+                  logAction(req, 'CREATE', 'productos', descripcionLog);
+                  
+                  res.status(201).json({
+                    message: 'Complemento creado con precio predeterminado',
+                    id_producto: pizzaId,
+                    precio: precioFinal
+                  });
+                }
+              );
+            } else {
+              // Para otros productos (no complementos)
+              const descripcionLog = `Producto creado sin precios: "${titulo}" (ID: ${pizzaId}) en categoría "${categoria}"`;
+              logAction(req, 'CREATE', 'productos', descripcionLog);
+              
+              res.status(201).json({
+                message: 'Producto creado sin precios (ajusta tu formulario)',
+                id_producto: pizzaId
+              });
+            }
           }
         }
       );
@@ -419,32 +535,89 @@ exports.getMenu = (req, res) => {
 
         // Si no tiene precios, agregar opciones vacías (para complementos, bebidas, etc.)
         if (precios.length === 0) {
-          productoMenu.opciones = [];
+          // Para complementos, intentamos asignar al menos un precio por defecto en UI
+          if (producto.categoria && producto.categoria.toLowerCase() === 'complementos') {
+            productoMenu.opciones = [{
+              tamanoId: 1, // ID estándar para tamaño único
+              nombre: 'Estándar',
+              precio: 0 // El precio se establecerá más adelante si existe
+            }];
+            
+            // Flag para marcar que necesita buscar el precio real
+            productoMenu.necesitaPrecioComplemento = true;
+          } else {
+            productoMenu.opciones = [];
+          }
         }
 
         menu.push(productoMenu);
         productosCompletados++;
 
-        // Si ya procesamos todos los productos, enviar respuesta
+        // Si ya procesamos todos los productos, procesamos los complementos y enviamos respuesta
         if (productosCompletados === productos.length) {
-          // Ordenar el menú por ID de producto
-          menu.sort((a, b) => a.id - b.id);
-
-          const descripcionLog = `Menú consultado exitosamente - ${productos.length} productos activos encontrados (incluyendo pizzas, complementos y otros productos)`;
-          logAction(req, 'READ', 'productos', descripcionLog);
-
-          res.status(200).json({ 
-            message: 'Menú cargado', 
-            menu: menu,
-            estadisticas: {
-              total_productos: productos.length,
-              productos_con_precios: menu.filter(p => p.opciones.length > 0).length,
-              productos_sin_precios: menu.filter(p => p.opciones.length === 0).length
-            }
-          });
+          // Procesamiento final y envío de respuesta
+          finalizarProcesamiento();
         }
       });
     });
+
+    // Función para procesar complementos y enviar respuesta
+    function finalizarProcesamiento() {
+      // Buscar precios para complementos que no tienen precios registrados correctamente
+      const complementosSinPrecio = menu.filter(p => p.necesitaPrecioComplemento);
+      
+      // Función para enviar la respuesta final
+      function enviarRespuestaMenu() {
+        // Ordenar el menú por ID de producto
+        menu.sort((a, b) => a.id - b.id);
+
+        const descripcionLog = `Menú consultado exitosamente - ${productos.length} productos activos encontrados (incluyendo pizzas, complementos y otros productos)`;
+        logAction(req, 'READ', 'productos', descripcionLog);
+
+        res.status(200).json({ 
+          message: 'Menú cargado', 
+          menu: menu,
+          estadisticas: {
+            total_productos: productos.length,
+            productos_con_precios: menu.filter(p => p.opciones.length > 0).length,
+            productos_sin_precios: menu.filter(p => p.opciones.length === 0).length
+          }
+        });
+      }
+      
+      // Si hay complementos sin precio, procesarlos primero
+      if (complementosSinPrecio.length > 0) {
+        let complementosActualizados = 0;
+        
+        // Para cada complemento sin precio, buscamos si existe algún precio en la BD
+        complementosSinPrecio.forEach(complemento => {
+          pool.query(
+            'SELECT precio FROM precios WHERE pizza_id = ? LIMIT 1',
+            [complemento.id],
+            (precioErr, precioResult) => {
+              // Si encontramos un precio, lo asignamos
+              if (!precioErr && precioResult.length > 0) {
+                const precio = parseFloat(precioResult[0].precio);
+                complemento.opciones[0].precio = precio || 0;
+              }
+              
+              // Eliminamos la propiedad auxiliar
+              delete complemento.necesitaPrecioComplemento;
+              
+              complementosActualizados++;
+              
+              // Si ya procesamos todos los complementos, enviamos la respuesta
+              if (complementosActualizados === complementosSinPrecio.length) {
+                enviarRespuestaMenu();
+              }
+            }
+          );
+        });
+      } else {
+        // Si no hay complementos para procesar, enviamos la respuesta directamente
+        enviarRespuestaMenu();
+      }
+    }
   });
 };
 
