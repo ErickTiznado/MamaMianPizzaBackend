@@ -95,8 +95,13 @@ SELECT 'Categorías mantenidas' as entidad, COUNT(*) as total FROM categorias;
 SELECT 'Pedidos eliminados' as entidad, COUNT(*) as total FROM pedidos;
 
 -- -----------------------------------------------------
--- Registrar la limpieza en logs
+-- No registramos en logs automáticamente para evitar error de prepared statement
 -- -----------------------------------------------------
+-- En su lugar, mostraremos un mensaje de éxito
+SELECT 'Limpieza completada exitosamente' as resultado;
+
+-- NOTA: Para registrar esta acción en logs, ejecutar manualmente:
+/*
 INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) 
 VALUES (
   (SELECT id_usuario FROM administradores JOIN usuarios ON id_admin = id_usuario LIMIT 1),
@@ -104,6 +109,7 @@ VALUES (
   'system',
   'Limpieza general de la base de datos ejecutada, manteniendo usuarios y administradores'
 );
+*/
 
 -- -----------------------------------------------------
 -- RESUMEN DEL SCRIPT
