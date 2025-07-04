@@ -22,30 +22,30 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- -----------------------------------------------------
 TRUNCATE TABLE transacciones;
 -- La tabla datos_pedido_temporal no existe en esta BD
-DELETE FROM logs WHERE tipo = 'PAYMENT';
-DELETE FROM notificaciones WHERE tipo LIKE '%PAGO%';
+DELETE FROM logs WHERE accion = 'PAYMENT';
+DELETE FROM notificaciones WHERE tipo LIKE '%pago%';
 
 -- -----------------------------------------------------
 -- Pedidos y relacionados
 -- -----------------------------------------------------
 TRUNCATE TABLE detalle_pedidos;
 TRUNCATE TABLE pedidos;
-DELETE FROM logs WHERE tabla = 'pedidos';
-DELETE FROM notificaciones WHERE tipo LIKE '%PEDIDO%';
+DELETE FROM logs WHERE tabla_afectada = 'pedidos';
+DELETE FROM notificaciones WHERE tipo = 'pedido';
 
 -- -----------------------------------------------------
 -- Reseñas y experiencia de usuario
 -- -----------------------------------------------------
 TRUNCATE TABLE resenas;
 TRUNCATE TABLE experiencia;
-DELETE FROM logs WHERE tabla = 'resenas';
+DELETE FROM logs WHERE tabla_afectada = 'resenas';
 
 -- -----------------------------------------------------
 -- Reservas
 -- -----------------------------------------------------
 TRUNCATE TABLE reservas;
-DELETE FROM logs WHERE tabla = 'reservas';
-DELETE FROM notificaciones WHERE tipo LIKE '%RESERVA%';
+DELETE FROM logs WHERE tabla_afectada = 'reservas';
+DELETE FROM notificaciones WHERE tipo LIKE '%reserva%';
 
 -- -----------------------------------------------------
 -- Direcciones de clientes (mantiene la tabla usuarios)
@@ -62,8 +62,8 @@ DELETE FROM contenido_web WHERE seccion NOT IN ('about', 'welcome', 'footer');
 -- Limpiar notificaciones y logs no esenciales
 -- -----------------------------------------------------
 -- La tabla push_subscriptions no existe en esta BD
-DELETE FROM notificaciones WHERE fecha_creacion < DATE_SUB(NOW(), INTERVAL 1 DAY);
-DELETE FROM logs WHERE fecha < DATE_SUB(NOW(), INTERVAL 7 DAY) AND tipo NOT IN ('LOGIN', 'SECURITY', 'ADMIN_ACTION');
+DELETE FROM notificaciones WHERE fecha_emision < DATE_SUB(NOW(), INTERVAL 1 DAY);
+DELETE FROM logs WHERE fecha_hora < DATE_SUB(NOW(), INTERVAL 7 DAY) AND accion NOT IN ('LOGIN', 'SECURITY', 'ADMIN_ACTION');
 
 -- -----------------------------------------------------
 -- Mantener tablas de productos pero limpiar movimientos
@@ -97,7 +97,7 @@ SELECT 'Pedidos eliminados' as entidad, COUNT(*) as total FROM pedidos;
 -- -----------------------------------------------------
 -- Registrar la limpieza en logs
 -- -----------------------------------------------------
-INSERT INTO logs (id_usuario, tipo, tabla, descripcion) 
+INSERT INTO logs (id_usuario, accion, tabla_afectada, descripcion) 
 VALUES (
   (SELECT id_usuario FROM administradores JOIN usuarios ON id_admin = id_usuario LIMIT 1),
   'ADMIN_ACTION',
