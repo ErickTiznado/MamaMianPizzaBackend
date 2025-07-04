@@ -225,12 +225,19 @@ exports.submitContent = (req, res) => {
 
     const { titulo, descripcion, categoria, sesion, precios, precio, precio_unico } = req.body;
     
-    // Detectamos si es un complemento (aceptar 'complemento' o 'complementos')
+    // Detectamos si es un producto con precio único (complemento o bebida)
     const esComplemento = categoria && 
                         (categoria.toLowerCase() === 'complementos' || 
                          categoria.toLowerCase() === 'complemento');
     
-    // Para complementos, podemos recibir el precio como un único valor
+    const esBebida = categoria && 
+                   (categoria.toLowerCase() === 'bebidas' || 
+                    categoria.toLowerCase() === 'bebida');
+    
+    // Productos que utilizan precio único en lugar de múltiples precios
+    const usaPrecioUnico = esComplemento || esBebida;
+    
+    // Para productos con precio único, podemos recibir el precio como un único valor
     let preciosObj = {};
     
     if (precios) {
@@ -240,14 +247,14 @@ exports.submitContent = (req, res) => {
         : precios;
     }
     
-    // Para complementos, verificamos específicamente el campo precio_unico 
+    // Para productos con precio único, verificamos específicamente el campo precio_unico 
     // que viene de la UI como se mostró en el ejemplo
-    if (esComplemento && precio_unico && Object.keys(preciosObj).length === 0) {
-      console.log(`🔍 Complemento detectado con precio_unico: ${precio_unico}`);
+    if (usaPrecioUnico && precio_unico && Object.keys(preciosObj).length === 0) {
+      console.log(`🔍 Producto de tipo ${categoria} detectado con precio_unico: ${precio_unico}`);
       preciosObj = { "1": precio_unico };
-    } else if (esComplemento && precio && Object.keys(preciosObj).length === 0) {
-      // Si es complemento y viene un precio único, lo asignamos al tamaño estándar (id=1)
-      console.log(`🔍 Complemento detectado con precio: ${precio}`);
+    } else if (usaPrecioUnico && precio && Object.keys(preciosObj).length === 0) {
+      // Si usa precio único y viene un precio, lo asignamos al tamaño estándar (id=1)
+      console.log(`🔍 Producto de tipo ${categoria} detectado con precio: ${precio}`);
       preciosObj = { "1": precio };
     }
 
@@ -255,9 +262,9 @@ exports.submitContent = (req, res) => {
       return res.status(400).json({ message: 'Faltan datos requeridos' });
     }
     
-    // Log de debug para ver todos los campos cuando es un complemento
-    if (esComplemento) {
-      console.log('📋 Datos de complemento recibidos:');
+    // Log de debug para ver todos los campos cuando es un producto con precio único
+    if (usaPrecioUnico) {
+      console.log(`📋 Datos de ${categoria} recibidos:`);
       console.log('- Título:', titulo);
       console.log('- Categoría:', categoria);
       console.log('- Precio único:', precio_unico);
@@ -296,29 +303,35 @@ exports.submitContent = (req, res) => {
           let entries = Object.entries(preciosObj);
           let pendientes = entries.length, fallo = false;
 
-          // Comprobar si es un complemento (aceptar 'complemento' o 'complementos')
+          // Comprobar si es un producto con precio único (complemento o bebida)
           const esComplemento = categoria.toLowerCase() === 'complementos' || 
                               categoria.toLowerCase() === 'complemento';
           
+          const esBebida = categoria.toLowerCase() === 'bebidas' || 
+                         categoria.toLowerCase() === 'bebida';
+          
+          // Productos que usan precio único
+          const usaPrecioUnico = esComplemento || esBebida;
+          
           console.log(`🧾 Procesando producto "${titulo}" (${categoria}) con ${entries.length} precios`);
           
-          // Si es complemento y no tiene entradas de precio, buscamos específicamente precio_unico
-          if (esComplemento && entries.length === 0) {
-            // Primero buscamos en precio_unico que es el campo principal para complementos
+          // Si es producto con precio único y no tiene entradas de precio, buscamos específicamente precio_unico
+          if (usaPrecioUnico && entries.length === 0) {
+            // Primero buscamos en precio_unico que es el campo principal para productos con precio único
             if (req.body.precio_unico && !isNaN(parseFloat(req.body.precio_unico))) {
               const precioValor = parseFloat(req.body.precio_unico);
-              console.log(`💰 Encontrado precio_unico para complemento: ${precioValor}`);
+              console.log(`💰 Encontrado precio_unico para ${categoria}: ${precioValor}`);
               entries = [['1', precioValor]]; // Tamaño estándar (id=1)
               pendientes = 1;
             } 
             // Si no hay precio_unico, buscamos en otros campos posibles
             else {
-              const camposPosibles = ['precio', 'precioUnico', 'precioComplemento', 'value'];
+              const camposPosibles = ['precio', 'precioUnico', 'precioComplemento', 'precioBebida', 'value'];
               
               for (const campo of camposPosibles) {
                 if (req.body[campo] && !isNaN(parseFloat(req.body[campo]))) {
                   const precioValor = parseFloat(req.body[campo]);
-                  console.log(`💰 Encontrado precio para complemento en campo ${campo}: ${precioValor}`);
+                  console.log(`💰 Encontrado precio para ${categoria} en campo ${campo}: ${precioValor}`);
                   entries = [['1', precioValor]]; // Tamaño estándar (id=1)
                   pendientes = 1;
                   break;
@@ -328,7 +341,7 @@ exports.submitContent = (req, res) => {
             
             // Si aún no tenemos precio, imprimimos todo el cuerpo para debug
             if (entries.length === 0) {
-              console.log('🔍 Contenido completo del formulario para depuración:');
+              console.log(`🔍 Contenido completo del formulario para ${categoria} sin precio encontrado:`);
               console.log(req.body);
             }
           }
@@ -361,9 +374,17 @@ exports.submitContent = (req, res) => {
 
           // Si no hay tamaños, tenemos que tomar una decisión
           if (entries.length === 0) {
-            // Para complementos, insertamos un precio predeterminado 
-            if (esComplemento) {
-              console.log(`⚠️ Complemento sin precio detectado: "${titulo}" (ID: ${pizzaId}) - Insertando precio predeterminado`);
+            // Para productos con precio único (complementos o bebidas), insertamos un precio predeterminado
+            const esComplemento = categoria.toLowerCase() === 'complementos' || 
+                                categoria.toLowerCase() === 'complemento';
+            
+            const esBebida = categoria.toLowerCase() === 'bebidas' || 
+                           categoria.toLowerCase() === 'bebida';
+            
+            const usaPrecioUnico = esComplemento || esBebida;
+            
+            if (usaPrecioUnico) {
+              console.log(`⚠️ ${categoria} sin precio detectado: "${titulo}" (ID: ${pizzaId}) - Insertando precio predeterminado`);
               
               // Último intento: buscar precio_unico específicamente o en otros campos del req.body
               let precioEncontrado = 0;
@@ -397,11 +418,11 @@ exports.submitContent = (req, res) => {
                     console.error('Error al insertar precio predeterminado para complemento', err);
                   }
                   
-                  const descripcionLog = `Complemento creado con precio predeterminado: "${titulo}" (ID: ${pizzaId}) - Precio: ${precioFinal}`;
+                  const descripcionLog = `${categoria} creado con precio predeterminado: "${titulo}" (ID: ${pizzaId}) - Precio: ${precioFinal}`;
                   logAction(req, 'CREATE', 'productos', descripcionLog);
                   
                   res.status(201).json({
-                    message: 'Complemento creado con precio predeterminado',
+                    message: `${categoria} creado con precio predeterminado`,
                     id_producto: pizzaId,
                     precio: precioFinal
                   });
