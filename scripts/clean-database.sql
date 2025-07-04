@@ -3,6 +3,16 @@
 -- Fecha: 3-Julio-2025
 -- Ejecutar con precaución en entornos de producción
 
+-- Verificar que existan usuarios antes de limpiar (safeguard)
+SELECT COUNT(*) INTO @user_count FROM usuarios;
+SELECT COUNT(*) INTO @admin_count FROM administradores;
+
+-- Si no hay usuarios o administradores, detener el script
+SELECT IF(@user_count = 0 OR @admin_count = 0, 
+          SIGNAL SQLSTATE '45000' 
+          SET MESSAGE_TEXT = 'No se puede limpiar la BD porque no hay usuarios o administradores.', 
+          'Usuarios y administradores verificados.') as validacion;
+
 -- Desactivar restricciones de clave foránea temporalmente
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -10,7 +20,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- Transacciones y datos de pago
 -- -----------------------------------------------------
 TRUNCATE TABLE transacciones;
-TRUNCATE TABLE datos_pedido_temporal;
+-- La tabla datos_pedido_temporal no existe en esta BD
 DELETE FROM logs WHERE tipo = 'PAYMENT';
 DELETE FROM notificaciones WHERE tipo LIKE '%PAGO%';
 
@@ -50,7 +60,7 @@ DELETE FROM contenido_web WHERE seccion NOT IN ('about', 'welcome', 'footer');
 -- -----------------------------------------------------
 -- Limpiar notificaciones y logs no esenciales
 -- -----------------------------------------------------
-TRUNCATE TABLE push_subscriptions;
+-- La tabla push_subscriptions no existe en esta BD
 DELETE FROM notificaciones WHERE fecha_creacion < DATE_SUB(NOW(), INTERVAL 1 DAY);
 DELETE FROM logs WHERE fecha < DATE_SUB(NOW(), INTERVAL 7 DAY) AND tipo NOT IN ('LOGIN', 'SECURITY', 'ADMIN_ACTION');
 
@@ -68,6 +78,11 @@ TRUNCATE TABLE password_reset;
 -- Reactivar restricciones de clave foránea
 -- -----------------------------------------------------
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- -----------------------------------------------------
+-- Limpiar otras tablas que pueden contener datos transaccionales
+-- -----------------------------------------------------
+TRUNCATE TABLE metodos_pago;
 
 -- -----------------------------------------------------
 -- Estadísticas después de la limpieza

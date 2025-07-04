@@ -77,15 +77,33 @@ async function executeCleanup() {
     
     // Ejecutar cada instrucción SQL
     for(const statement of sqlStatements) {
-      if (statement.includes('SELECT')) {
-        // Para las consultas SELECT, mostramos los resultados
-        const [results] = await connection.execute(statement);
-        if (results.length > 0 && results[0].entidad) {
-          console.log(`${colors.green}✓ ${results[0].entidad}: ${results[0].total}${colors.reset}`);
+      try {
+        if (statement.includes('SELECT')) {
+          // Para las consultas SELECT, mostramos los resultados
+          const [results] = await connection.execute(statement);
+          if (results.length > 0 && results[0].entidad) {
+            console.log(`${colors.green}✓ ${results[0].entidad}: ${results[0].total}${colors.reset}`);
+          }
+        } else {
+          // Para otras instrucciones, solo las ejecutamos
+          await connection.execute(statement);
+          
+          // Mostrar información sobre la operación ejecutada
+          if (statement.includes('TRUNCATE')) {
+            const tableName = statement.match(/TRUNCATE TABLE\s+(\w+)/i);
+            if (tableName && tableName[1]) {
+              console.log(`${colors.cyan}🗑️ Limpiando tabla ${tableName[1]}${colors.reset}`);
+            }
+          }
         }
-      } else {
-        // Para otras instrucciones, solo las ejecutamos
-        await connection.execute(statement);
+      } catch (err) {
+        // Si la tabla no existe, seguimos adelante
+        if (err.message.includes("doesn't exist")) {
+          console.log(`${colors.yellow}⚠️ Ignorando tabla que no existe: ${err.message}${colors.reset}`);
+          continue;
+        } else {
+          throw err;
+        }
       }
     }
     
