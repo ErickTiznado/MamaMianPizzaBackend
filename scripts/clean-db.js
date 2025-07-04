@@ -22,12 +22,11 @@ function showWarning() {
   ⚠️  ADVERTENCIA ⚠️
   =====================================================
   Este script eliminará TODOS los datos excepto:
-  - Usuarios 
   - Administradores
   - Estructura de productos y categorías
 
-  Todos los pedidos, reseñas, reservas, transacciones, 
-  y demás datos serán ELIMINADOS PERMANENTEMENTE.
+  Todos los usuarios regulares, pedidos, reseñas, reservas, 
+  transacciones, y demás datos serán ELIMINADOS PERMANENTEMENTE.
   
   Este proceso NO se puede deshacer.
   =====================================================
@@ -75,21 +74,17 @@ async function executeCleanup() {
     console.log(`${colors.cyan}Conectado a la base de datos: ${process.env.BD_NAME}${colors.reset}`);
     console.log(`${colors.blue}Iniciando limpieza de la base de datos...${colors.reset}`);
     
-    // Verificar que existan usuarios y administradores primero
-    const [verificationResults] = await connection.execute("SELECT COUNT(*) as count FROM usuarios;");
-    const userCount = verificationResults[0].count;
-    
+    // Verificar que existan administradores primero
     const [adminResults] = await connection.execute("SELECT COUNT(*) as count FROM administradores;");
     const adminCount = adminResults[0].count;
     
-    if (userCount === 0 || adminCount === 0) {
+    if (adminCount === 0) {
       console.error(`${colors.red}
       ❌ ERROR: No hay suficientes datos para continuar.
-      - Usuarios encontrados: ${userCount}
       - Administradores encontrados: ${adminCount}
       
-      No se puede limpiar la BD porque no existen usuarios o administradores.
-      Este script está diseñado para preservar esos datos, pero no existen.
+      No se puede limpiar la BD porque no existen administradores.
+      Este script está diseñado para preservar administradores, pero no existen.
       ${colors.reset}`);
       
       await connection.end();
@@ -98,7 +93,6 @@ async function executeCleanup() {
     
     console.log(`${colors.green}
     ✅ Verificación completada:
-    - Usuarios encontrados: ${userCount}
     - Administradores encontrados: ${adminCount}
     ${colors.reset}`);
 

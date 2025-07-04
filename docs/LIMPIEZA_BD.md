@@ -1,10 +1,10 @@
 # Limpieza de Base de Datos para MamaMianPizza
 
-Este documento explica cómo usar el script para limpiar la base de datos mientras se preservan los usuarios y administradores.
+Este documento explica cómo usar el script para limpiar la base de datos mientras se preservan únicamente los administradores.
 
 ## Instrucciones
 
-Para limpiar la base de datos y preservar los usuarios y administradores, tienes las siguientes opciones:
+Para limpiar la base de datos y preservar únicamente los administradores, tienes las siguientes opciones:
 
 ### Opción 1: Usar el script de ayuda (recomendado)
 
@@ -40,8 +40,7 @@ El script realizará las siguientes acciones:
    - Elimina logs no esenciales
 
 Los datos que se conservan son:
-- Todos los usuarios (clientes registrados)
-- Todos los administradores
+- Todos los administradores (y sus cuentas de usuario asociadas)
 - Productos y categorías (estructura de menú)
 
 ## Solución de problemas
